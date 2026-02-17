@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JP Helper</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <header class="header">
+      <h1 class="title">JP Helper</h1>
+      <button id="openOptions" class="icon-btn" title="설정">⚙</button>
+    </header>
+
+    <div class="divider"></div>
+
+    <!-- Enable/Disable Toggle -->
+    <div class="section">
+      <label class="toggle-row">
+        <span>확장 프로그램 활성화</span>
+        <input type="checkbox" id="enableToggle" class="toggle">
+      </label>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- YouTube Mode Toggle -->
+    <div class="section">
+      <label class="toggle-row">
+        <span>YouTube 자막 번역</span>
+        <input type="checkbox" id="youtubeToggle" class="toggle">
+      </label>
+      <div class="hint">YouTube 영상 페이지에서 자동 활성화</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Webpage Mode Selection -->
+    <div class="section">
+      <div class="section-title">웹페이지 모드</div>
+      <label class="radio-row">
+        <input type="radio" name="mode" value="hover"> 호버 번역
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="mode" value="inline"> 인라인 번역
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="mode" value="furigana-only"> 전체 후리가나
+      </label>
+      <label class="radio-row">
+        <input type="radio" name="mode" value="off"> OFF
+      </label>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Learning Level -->
+    <div class="section">
+      <label class="select-row">
+        <span>학습 단계</span>
+        <select id="learningLevel">
+          <option value="beginner">입문</option>
+          <option value="elementary">초급</option>
+          <option value="intermediate">중급</option>
+          <option value="advanced">고급</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Display Options -->
+    <div class="section">
+      <div class="section-title">표시</div>
+      <label class="checkbox-row">
+        <input type="checkbox" id="showFurigana"> 후리가나
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="showTranslation"> 한국어 번역
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="showRomaji"> 로마지
+      </label>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Complexity Threshold Slider -->
+    <div class="section">
+      <div class="section-title">복잡도 임계값</div>
+      <div class="slider-row">
+        <span class="slider-label">Papago</span>
+        <input type="range" id="complexityThreshold" min="0" max="10" step="1">
+        <span class="slider-label" id="llmSliderLabel">AI</span>
+      </div>
+      <div class="slider-value">현재: <span id="thresholdValue">5</span></div>
+      <div class="usage-estimate"><span id="llmName">AI</span> 사용 비율: ~<span id="llmRatio">35</span>%</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- AI Translation Engine Selection -->
+    <div class="section">
+      <div class="section-title">AI 번역 엔진</div>
+      <label class="select-row">
+        <span>플랫폼</span>
+        <select id="llmPlatform">
+          <option value="claude">Claude</option>
+          <option value="openai">GPT</option>
+          <option value="gemini">Gemini</option>
+        </select>
+      </label>
+      <label class="select-row">
+        <span>모델</span>
+        <select id="llmModel"></select>
+      </label>
+    </div>
+
+    <!-- API Status -->
+    <div class="section status-section">
+      <div class="api-status">
+        <span id="papagoStatus" class="status-dot off"></span> Papago
+        <span id="claudeStatus" class="status-dot off"></span> Claude
+        <span id="openaiStatus" class="status-dot off"></span> GPT
+        <span id="geminiStatus" class="status-dot off"></span> Gemini
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="popup.ts"></script>
+</body>
+</html>

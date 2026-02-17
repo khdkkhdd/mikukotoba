@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JP Helper - 설정</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="options-page">
+    <header class="page-header">
+      <h1>JP Helper 설정</h1>
+    </header>
+
+    <!-- API Keys Section -->
+    <section class="card" id="apiSection">
+      <h2>API 키 설정</h2>
+      <p class="help-text">번역 기능을 사용하려면 API 키를 입력해주세요. 키는 이 기기에만 저장됩니다.</p>
+
+      <div class="form-group">
+        <label>Papago Client ID</label>
+        <div class="input-row">
+          <input type="password" id="papagoClientId" placeholder="Naver Cloud Platform Client ID">
+          <button id="togglePapagoId" class="btn-small">표시</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Papago Client Secret</label>
+        <div class="input-row">
+          <input type="password" id="papagoClientSecret" placeholder="Naver Cloud Platform Client Secret">
+          <button id="togglePapagoSecret" class="btn-small">표시</button>
+        </div>
+      </div>
+
+      <button id="testPapago" class="btn">연결 테스트</button>
+      <span id="papagoTestResult" class="test-result"></span>
+
+      <div class="form-group" style="margin-top: 20px;">
+        <label>Claude API Key</label>
+        <div class="input-row">
+          <input type="password" id="claudeApiKey" placeholder="Anthropic API Key (sk-ant-...)">
+          <button id="toggleClaudeKey" class="btn-small">표시</button>
+        </div>
+      </div>
+
+      <button id="testClaude" class="btn">연결 테스트</button>
+      <span id="claudeTestResult" class="test-result"></span>
+
+      <div class="form-group" style="margin-top: 20px;">
+        <label>OpenAI API Key</label>
+        <div class="input-row">
+          <input type="password" id="openaiApiKey" placeholder="OpenAI API Key (sk-...)">
+          <button id="toggleOpenaiKey" class="btn-small">표시</button>
+        </div>
+      </div>
+
+      <button id="testOpenai" class="btn">연결 테스트</button>
+      <span id="openaiTestResult" class="test-result"></span>
+
+      <div class="form-group" style="margin-top: 20px;">
+        <label>Gemini API Key</label>
+        <div class="input-row">
+          <input type="password" id="geminiApiKey" placeholder="Google AI Studio API Key">
+          <button id="toggleGeminiKey" class="btn-small">표시</button>
+        </div>
+      </div>
+
+      <button id="testGemini" class="btn">연결 테스트</button>
+      <span id="geminiTestResult" class="test-result"></span>
+
+      <button id="saveApiKeys" class="btn btn-primary" style="margin-top: 16px;">키 저장</button>
+    </section>
+
+    <!-- Display Settings -->
+    <section class="card">
+      <h2>표시 설정</h2>
+
+      <div class="form-group">
+        <label>글꼴 크기: <span id="fontSizeValue">18</span>px</label>
+        <input type="range" id="fontSize" min="14" max="32" step="1" value="18">
+      </div>
+
+      <div class="form-group">
+        <label>배경 투명도: <span id="opacityValue">80</span>%</label>
+        <input type="range" id="backgroundOpacity" min="0" max="100" step="5" value="80">
+      </div>
+
+      <h3>YouTube 오버레이 / 호버 팝업</h3>
+      <div class="color-grid">
+        <div class="form-group">
+          <label>원문</label>
+          <input type="color" id="colorOriginal" value="#FFFFFF">
+        </div>
+        <div class="form-group">
+          <label>후리가나</label>
+          <input type="color" id="colorFurigana" value="#B0B0B0">
+        </div>
+        <div class="form-group">
+          <label>로마지</label>
+          <input type="color" id="colorRomaji" value="#7CB9E8">
+        </div>
+        <div class="form-group">
+          <label>번역</label>
+          <input type="color" id="colorTranslation" value="#F0E68C">
+        </div>
+      </div>
+
+      <!-- YouTube Preview -->
+      <div class="preview-box" id="preview">
+        <div class="preview-original">
+          <ruby>食<rt>た</rt></ruby>べに<ruby>行<rt>い</rt></ruby>きました
+        </div>
+        <div class="preview-romaji">tabe ni ikimashita</div>
+        <div class="preview-translation">먹으러 갔습니다</div>
+      </div>
+
+      <h3 style="margin-top: 20px;">인라인 / 후리가나 모드</h3>
+      <p class="help-text">웹페이지 본문에 삽입되는 텍스트 색상 및 크기</p>
+
+      <div class="form-group">
+        <label>번역 블록 크기: <span id="inlineFontScaleValue">0.88</span>em</label>
+        <input type="range" id="inlineFontScale" min="0.7" max="1.2" step="0.02" value="0.88">
+      </div>
+      <div class="form-group">
+        <label>후리가나 크기: <span id="inlineFuriganaScaleValue">0.55</span>em</label>
+        <input type="range" id="inlineFuriganaScale" min="0.4" max="0.8" step="0.05" value="0.55">
+      </div>
+
+      <div class="color-grid">
+        <div class="form-group">
+          <label>후리가나</label>
+          <input type="color" id="inlineColorFurigana" value="#888888">
+        </div>
+        <div class="form-group">
+          <label>로마지</label>
+          <input type="color" id="inlineColorRomaji" value="#4A7DFF">
+        </div>
+        <div class="form-group">
+          <label>번역</label>
+          <input type="color" id="inlineColorTranslation" value="#555555">
+        </div>
+      </div>
+
+      <!-- Inline Preview -->
+      <div class="preview-box preview-box-inline" id="previewInline">
+        <div class="preview-inline-original">
+          <ruby>食<rt>た</rt></ruby>べに<ruby>行<rt>い</rt></ruby>きました
+        </div>
+        <div class="preview-inline-romaji">tabe ni ikimashita</div>
+        <div class="preview-inline-translation">먹으러 갔습니다</div>
+      </div>
+    </section>
+
+    <!-- Translation Settings -->
+    <section class="card">
+      <h2>번역 설정</h2>
+
+      <div class="form-group">
+        <label>AI 번역 플랫폼</label>
+        <select id="llmPlatform" class="select-full">
+          <option value="claude">Claude (Anthropic)</option>
+          <option value="openai">GPT (OpenAI)</option>
+          <option value="gemini">Gemini (Google)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>모델 선택</label>
+        <select id="llmModel" class="select-full"></select>
+      </div>
+
+      <div class="form-group">
+        <label>복잡도 임계값: <span id="thresholdValue">5</span></label>
+        <p class="help-text">낮을수록 AI 사용 비율이 높아집니다 (더 정확하지만 비용 증가)</p>
+        <input type="range" id="complexityThreshold" min="0" max="10" step="1" value="5">
+        <div class="range-labels">
+          <span>0 (모두 AI)</span>
+          <span>10 (모두 Papago)</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>문맥 윈도우 크기: <span id="contextValue">3</span></label>
+        <p class="help-text">AI 번역 시 참고할 이전 문장 수</p>
+        <input type="range" id="contextWindowSize" min="1" max="5" step="1" value="3">
+      </div>
+
+      <details class="advanced-settings">
+        <summary>고급 설정 (복잡도 가중치)</summary>
+        <div class="form-group">
+          <label>경어 감지 가중치: <span id="keigoValue">3</span></label>
+          <input type="range" id="keigoWeight" min="0" max="5" step="1" value="3">
+        </div>
+        <div class="form-group">
+          <label>문장 길이 가중치: <span id="lengthValue">1</span></label>
+          <input type="range" id="lengthWeight" min="0" max="3" step="1" value="1">
+        </div>
+        <div class="form-group">
+          <label>관용구 감지 가중치: <span id="idiomValue">2</span></label>
+          <input type="range" id="idiomWeight" min="0" max="3" step="1" value="2">
+        </div>
+      </details>
+    </section>
+
+    <!-- Glossary -->
+    <section class="card">
+      <h2>용어집</h2>
+
+      <details>
+        <summary>내장 용어집 보기</summary>
+        <div id="builtInGlossary" class="glossary-list"></div>
+      </details>
+
+      <h3 style="margin-top: 16px;">커스텀 용어집</h3>
+
+      <div class="glossary-add">
+        <input type="text" id="glossaryJp" placeholder="일본어">
+        <input type="text" id="glossaryKo" placeholder="한국어">
+        <input type="text" id="glossaryNote" placeholder="메모 (선택)">
+        <button id="addGlossary" class="btn btn-small">추가</button>
+      </div>
+
+      <div id="customGlossary" class="glossary-list"></div>
+
+      <div class="glossary-actions">
+        <button id="importGlossary" class="btn btn-small">CSV 가져오기</button>
+        <button id="exportGlossary" class="btn btn-small">CSV 내보내기</button>
+        <input type="file" id="glossaryFile" accept=".csv" style="display: none;">
+      </div>
+    </section>
+
+    <!-- Cache Management -->
+    <section class="card">
+      <h2>캐시 관리</h2>
+      <p>캐시된 항목: <strong id="cacheCount">0</strong>개 (약 <span id="cacheSize">0</span>KB)</p>
+      <button id="clearCache" class="btn btn-danger">캐시 전체 삭제</button>
+    </section>
+
+    <!-- Usage Statistics -->
+    <section class="card">
+      <h2>사용 통계</h2>
+
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value" id="totalTranslations">0</div>
+          <div class="stat-label">총 번역 수</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="papagoCount">0</div>
+          <div class="stat-label">Papago</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="claudeCount">0</div>
+          <div class="stat-label">Claude</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="openaiCount">0</div>
+          <div class="stat-label">OpenAI</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="geminiCount">0</div>
+          <div class="stat-label">Gemini</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="cacheHits">0</div>
+          <div class="stat-label">캐시 히트</div>
+        </div>
+      </div>
+
+      <div class="usage-bar" id="usageBar">
+        <div class="usage-papago" id="usagePapago" style="width: 25%"></div>
+        <div class="usage-claude" id="usageClaude" style="width: 25%"></div>
+        <div class="usage-openai" id="usageOpenai" style="width: 25%"></div>
+        <div class="usage-gemini" id="usageGemini" style="width: 25%"></div>
+      </div>
+      <div class="usage-legend">
+        <span class="legend-papago">Papago</span>
+        <span class="legend-claude">Claude</span>
+        <span class="legend-openai">OpenAI</span>
+        <span class="legend-gemini">Gemini</span>
+      </div>
+    </section>
+
+    <!-- Keyboard Shortcuts -->
+    <section class="card">
+      <h2>키보드 단축키</h2>
+      <table class="shortcut-table">
+        <tr><td><kbd>Alt+J</kbd></td><td>확장 프로그램 ON/OFF</td></tr>
+        <tr><td><kbd>Alt+F</kbd></td><td>후리가나 토글</td></tr>
+        <tr><td><kbd>Alt+T</kbd></td><td>번역 표시 토글</td></tr>
+        <tr><td><kbd>Alt+R</kbd></td><td>로마지 토글</td></tr>
+      </table>
+      <p class="help-text">단축키 변경: chrome://extensions/shortcuts</p>
+    </section>
+  </div>
+
+  <script type="module" src="options.ts"></script>
+</body>
+</html>

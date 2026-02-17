@@ -1,0 +1,86 @@
+/* JP Helper - Shared overlay styles */
+
+/* Furigana line height adjustment for injected ruby */
+[data-jp-processed] {
+  line-height: 2.3em;
+}
+
+/* Furigana rt styling for webpage inline/furigana modes */
+[data-jp-processed] ruby rt {
+  font-size: calc(var(--jp-inline-furigana-scale, 0.55) * 1em);
+  color: var(--jp-inline-color-furigana, #888);
+}
+
+/* Inline translation block (generic webpage) */
+.jp-inline-translation {
+  display: block;
+  font-size: 0.9em;
+  color: var(--jp-inline-color-translation, #555);
+  font-style: italic;
+  margin-top: 4px;
+  padding: 4px 0;
+  border-top: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+/* Inline romaji block (generic webpage) */
+.jp-inline-romaji {
+  color: var(--jp-inline-color-romaji, #4A7DFF);
+  font-size: 0.9em;
+  margin-bottom: 2px;
+}
+
+/* Engine badge (generic webpage) */
+.jp-inline-engine-badge {
+  text-align: right;
+  font-size: 0.75em;
+  color: rgba(128, 128, 128, 0.5);
+  margin-top: 2px;
+  font-style: normal;
+}
+
+/* Retry button (generic webpage) */
+.jp-inline-retry-btn {
+  cursor: pointer;
+  opacity: 0.5;
+  display: inline-block;
+  transition: opacity 0.15s;
+  margin-left: 4px;
+}
+
+.jp-inline-retry-btn:hover {
+  opacity: 1;
+}
+
+.jp-inline-retry-spinning {
+  animation: jp-retry-spin 0.6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes jp-retry-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Hover popup container (outside shadow DOM for positioning) */
+.jp-hover-anchor {
+  position: relative;
+  display: inline;
+}
+
+/* ── Hide original text when furigana block replaces it ── */
+.jp-furigana-hidden {
+  display: none !important;
+}
+
+/* ── Spoiler / blur-to-reveal (shared across all handlers) ── */
+.jp-spoiler {
+  filter: blur(4px);
+  cursor: pointer;
+  transition: filter 0.2s ease;
+  user-select: none;
+}
+
+.jp-spoiler.jp-revealed {
+  filter: none;
+  cursor: default;
+  user-select: auto;
+}

@@ -1,0 +1,71 @@
+{
+  "manifest_version": 3,
+  "name": "JP Helper",
+  "version": "1.0.0",
+  "description": "일본어 학습 보조 - 후리가나, 로마지, 한국어 번역을 동시에",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.twitter.com/*",
+    "*://*.x.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://papago.apigw.ntruss.com/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/index.ts"]
+    },
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js": ["src/content/youtube/caption-bridge.ts"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    }
+  },
+  "options_page": "src/options/options.html",
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["dict/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "commands": {
+    "toggle-extension": {
+      "suggested_key": { "default": "Alt+J" },
+      "description": "확장 프로그램 ON/OFF"
+    },
+    "toggle-furigana": {
+      "suggested_key": { "default": "Alt+F" },
+      "description": "후리가나 표시 토글"
+    },
+    "toggle-translation": {
+      "suggested_key": { "default": "Alt+T" },
+      "description": "번역 표시 토글"
+    },
+    "toggle-romaji": {
+      "suggested_key": { "default": "Alt+R" },
+      "description": "로마지 표시 토글"
+    }
+  }
+}

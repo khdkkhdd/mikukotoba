@@ -82,11 +82,16 @@ export class WebpageSiteHandler implements SiteHandler {
   }
 
   updateSettings(settings: UserSettings): void {
-    const oldMode = this.settings.webpageMode;
+    const prev = this.settings;
     this.settings = settings;
 
-    // If mode changed, restart
-    if (settings.webpageMode !== oldMode) {
+    const needsRestart =
+      settings.webpageMode !== prev.webpageMode ||
+      settings.showFurigana !== prev.showFurigana ||
+      settings.showTranslation !== prev.showTranslation ||
+      settings.showRomaji !== prev.showRomaji;
+
+    if (needsRestart) {
       this.stop();
       if (settings.webpageMode !== 'off') {
         this.start();

@@ -6,16 +6,36 @@ const KANJI_REGEX = /[\u4E00-\u9FFF\u3400-\u4DBF]/;
 /**
  * Generate furigana HTML using ruby tags from morpheme tokens.
  * Only adds ruby annotations for tokens containing kanji.
+ *
+ * Detects and skips inline readings that duplicate the ruby annotation
+ * (e.g. 更新こうしん → tokens ["更新", "こうしん"] → only outputs ruby for 更新).
  */
 export function tokensToFuriganaHTML(tokens: MorphemeToken[]): string {
-  return tokens
-    .map((token) => {
-      if (token.isKanji && token.reading !== token.surface) {
-        return `<ruby>${escapeHtml(token.surface)}<rt>${escapeHtml(token.reading)}</rt></ruby>`;
+  const parts: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.isKanji && token.reading !== token.surface) {
+      parts.push(`<ruby>${escapeHtml(token.surface)}<rt>${escapeHtml(token.reading)}</rt></ruby>`);
+
+      // Skip subsequent tokens that form an inline reading duplicate
+      let consumed = 0;
+      let j = i + 1;
+      while (j < tokens.length && consumed < token.reading.length) {
+        if (token.reading.startsWith(tokens[j].surface, consumed)) {
+          consumed += tokens[j].surface.length;
+          j++;
+        } else {
+          break;
+        }
       }
-      return escapeHtmlWithBreaks(token.surface);
-    })
-    .join('');
+      if (consumed === token.reading.length) {
+        i = j - 1; // Skip consumed tokens (loop increments i)
+      }
+    } else {
+      parts.push(escapeHtmlWithBreaks(token.surface));
+    }
+  }
+  return parts.join('');
 }
 
 /**

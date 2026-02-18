@@ -1,9 +1,11 @@
 /**
  * Element category for mode-based rendering.
- * - 'main': Long-form text (titles, descriptions, comments) → inline block or hover
+ * - 'main': Short/non-interactive text (titles) → furigana hide/replace is safe
+ * - 'rich': Long-form or interactive text (comments, descriptions, posts)
+ *           → never hide original (preserves links, @mentions, timestamps)
  * - 'label': Short labels (channel names, hashtags) → inline bracket or hover
  */
-export type YTElementCategory = 'main' | 'label';
+export type YTElementCategory = 'main' | 'rich' | 'label';
 
 export interface YTSelectorDef {
   key: string;
@@ -19,8 +21,8 @@ export interface YTSelectorDef {
 export const YT_SELECTOR_DEFS: YTSelectorDef[] = [
   // Watch page
   { key: 'videoTitle', selector: 'ytd-watch-metadata h1 yt-formatted-string', category: 'main', deferToViewport: false },
-  { key: 'commentText', selector: '#content-text.ytd-comment-renderer', category: 'main', deferToViewport: true },
-  { key: 'commentTextNew', selector: 'ytd-comment-view-model #content-text', category: 'main', deferToViewport: true },
+  { key: 'commentText', selector: '#content-text.ytd-comment-renderer', category: 'rich', deferToViewport: true },
+  { key: 'commentTextNew', selector: 'ytd-comment-view-model #content-text', category: 'rich', deferToViewport: true },
   { key: 'commentAuthor', selector: '#author-text yt-formatted-string', category: 'label', deferToViewport: true },
   { key: 'channelName', selector: '#channel-name yt-formatted-string', category: 'label', deferToViewport: false },
   { key: 'hashtag', selector: 'ytd-watch-metadata #super-title a', category: 'label', deferToViewport: false },
@@ -39,27 +41,27 @@ export const YT_SELECTOR_DEFS: YTSelectorDef[] = [
 
   // Search
   { key: 'searchVideoTitle', selector: 'ytd-video-renderer #video-title yt-formatted-string', category: 'main', deferToViewport: true },
-  { key: 'searchDescription', selector: 'ytd-video-renderer #description-text yt-formatted-string', category: 'main', deferToViewport: true },
-  { key: 'searchChannelDesc', selector: 'ytd-channel-renderer #description yt-formatted-string', category: 'main', deferToViewport: true },
+  { key: 'searchDescription', selector: 'ytd-video-renderer #description-text yt-formatted-string', category: 'rich', deferToViewport: true },
+  { key: 'searchChannelDesc', selector: 'ytd-channel-renderer #description yt-formatted-string', category: 'rich', deferToViewport: true },
   { key: 'searchPlaylist', selector: 'ytd-playlist-renderer #video-title yt-formatted-string', category: 'main', deferToViewport: true },
 
   // Channel
   { key: 'channelHeaderName', selector: '#channel-header #channel-name yt-formatted-string', category: 'label', deferToViewport: false },
-  { key: 'channelTagline', selector: '#channel-header #channel-tagline yt-formatted-string', category: 'main', deferToViewport: false },
-  { key: 'channelAbout', selector: 'ytd-channel-about-metadata-renderer #description', category: 'main', deferToViewport: true },
-  { key: 'communityPost', selector: 'ytd-backstage-post-thread-renderer #content-text', category: 'main', deferToViewport: true },
+  { key: 'channelTagline', selector: '#channel-header #channel-tagline yt-formatted-string', category: 'rich', deferToViewport: false },
+  { key: 'channelAbout', selector: 'ytd-channel-about-metadata-renderer #description', category: 'rich', deferToViewport: true },
+  { key: 'communityPost', selector: 'ytd-backstage-post-thread-renderer #content-text', category: 'rich', deferToViewport: true },
   { key: 'pollOption', selector: 'ytd-backstage-poll-renderer #vote-text', category: 'label', deferToViewport: true },
   { key: 'channelPlaylistTitle', selector: 'ytd-grid-playlist-renderer #video-title yt-formatted-string', category: 'label', deferToViewport: true },
 
   // Playlist
   { key: 'playlistTitle', selector: 'ytd-playlist-header-renderer #title yt-formatted-string', category: 'main', deferToViewport: false },
-  { key: 'playlistDesc', selector: 'ytd-playlist-header-renderer #description yt-formatted-string', category: 'main', deferToViewport: true },
+  { key: 'playlistDesc', selector: 'ytd-playlist-header-renderer #description yt-formatted-string', category: 'rich', deferToViewport: true },
   { key: 'playlistVideo', selector: 'ytd-playlist-video-renderer #video-title', category: 'label', deferToViewport: true },
 
   // Shorts
-  { key: 'shortsDesc', selector: 'ytd-reel-video-renderer #reel-description-text', category: 'main', deferToViewport: true },
+  { key: 'shortsDesc', selector: 'ytd-reel-video-renderer #reel-description-text', category: 'rich', deferToViewport: true },
   { key: 'shortsChannel', selector: 'ytd-reel-video-renderer ytd-channel-name yt-formatted-string', category: 'label', deferToViewport: true },
-  { key: 'shortsComment', selector: 'ytd-reel-video-renderer ytd-comment-renderer #content-text, ytd-reel-video-renderer ytd-comment-view-model #content-text', category: 'main', deferToViewport: true },
+  { key: 'shortsComment', selector: 'ytd-reel-video-renderer ytd-comment-renderer #content-text, ytd-reel-video-renderer ytd-comment-view-model #content-text', category: 'rich', deferToViewport: true },
 ];
 
 /**

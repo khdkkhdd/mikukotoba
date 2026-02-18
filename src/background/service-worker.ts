@@ -150,16 +150,7 @@ async function handleMessage(
 
     case 'SETTINGS_CHANGED': {
       await saveSettings(message.payload);
-      // Notify all content scripts
-      const tabs = await chrome.tabs.query({});
-      for (const tab of tabs) {
-        if (tab.id) {
-          chrome.tabs.sendMessage(tab.id, {
-            type: 'SETTINGS_CHANGED',
-            payload: message.payload,
-          }).catch(() => {});
-        }
-      }
+      await broadcastToAllTabs({ type: 'SETTINGS_CHANGED', payload: message.payload });
       sendResponse({ success: true });
       break;
     }
@@ -311,31 +302,44 @@ async function handleMessage(
   }
 }
 
+// Broadcast a message to all tabs
+async function broadcastToAllTabs(message: MessageType): Promise<void> {
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) {
+    if (tab.id) {
+      chrome.tabs.sendMessage(tab.id, message).catch(() => {});
+    }
+  }
+}
+
 // Keyboard shortcut commands
 chrome.commands.onCommand.addListener(async (command) => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id) return;
-
   switch (command) {
     case 'toggle-extension':
       currentSettings.enabled = !currentSettings.enabled;
       await saveSettings({ enabled: currentSettings.enabled });
-      chrome.tabs.sendMessage(tab.id, {
+      await broadcastToAllTabs({
         type: 'TOGGLE_ENABLED',
         payload: { enabled: currentSettings.enabled },
-      }).catch(() => {});
+      });
       break;
 
     case 'toggle-furigana':
-      chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_FURIGANA' }).catch(() => {});
+      currentSettings.showFurigana = !currentSettings.showFurigana;
+      await saveSettings({ showFurigana: currentSettings.showFurigana });
+      await broadcastToAllTabs({ type: 'SETTINGS_CHANGED', payload: currentSettings });
       break;
 
     case 'toggle-translation':
-      chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_TRANSLATION' }).catch(() => {});
+      currentSettings.showTranslation = !currentSettings.showTranslation;
+      await saveSettings({ showTranslation: currentSettings.showTranslation });
+      await broadcastToAllTabs({ type: 'SETTINGS_CHANGED', payload: currentSettings });
       break;
 
     case 'toggle-romaji':
-      chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_ROMAJI' }).catch(() => {});
+      currentSettings.showRomaji = !currentSettings.showRomaji;
+      await saveSettings({ showRomaji: currentSettings.showRomaji });
+      await broadcastToAllTabs({ type: 'SETTINGS_CHANGED', payload: currentSettings });
       break;
   }
 });

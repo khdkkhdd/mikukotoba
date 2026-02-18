@@ -175,9 +175,6 @@ export type MessageType =
   | { type: 'SETTINGS_CHANGED'; payload: Partial<UserSettings> }
   | { type: 'MODE_CHANGED'; payload: { mode: WebpageMode } }
   | { type: 'TOGGLE_ENABLED'; payload: { enabled: boolean } }
-  | { type: 'TOGGLE_FURIGANA' }
-  | { type: 'TOGGLE_ROMAJI' }
-  | { type: 'TOGGLE_TRANSLATION' }
   | { type: 'GET_SETTINGS' }
   | { type: 'SETTINGS_RESPONSE'; payload: UserSettings }
   | { type: 'CLEAR_CACHE' }

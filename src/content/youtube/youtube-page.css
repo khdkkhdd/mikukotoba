@@ -127,6 +127,46 @@ ytd-macro-markers-list-item-renderer .jp-yt-inline-hint {
   font-size: 0.8em;
 }
 
+/* ──── Ruby-annotated clone ──── */
+/*
+ * The clone is inserted after ytd-expander (outside the original #content-text
+ * container), and its id is removed to prevent DOM conflicts. This means
+ * YouTube's component-scoped CSS no longer applies, causing the clone to
+ * inherit Polymer's 10px base font-size. We set 1.4rem (= 14px on YouTube)
+ * explicitly to match the original comment text.
+ * Scoped to ytd-app to avoid affecting Twitter (which has a 16px html base).
+ */
+ytd-app .jp-ruby-annotated {
+  line-height: 2.2em;
+  font-size: 1.4rem;
+}
+
+ytd-app .jp-ruby-annotated ruby rt {
+  font-size: calc(var(--jp-inline-furigana-scale, 0.55) * 1em);
+  color: var(--jp-inline-color-furigana, #888);
+}
+
+/* ──── Description translation container ──── */
+.jp-yt-desc-translations {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+html[dark] .jp-yt-desc-translations {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Remove inner border-top from translation blocks inside container */
+.jp-yt-desc-translations > .jp-yt-translation {
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0;
+}
+
 /* ──── Hover mode indicator ──── */
 .jp-yt-hover-target {
   cursor: help;

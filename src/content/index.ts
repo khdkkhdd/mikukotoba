@@ -231,21 +231,16 @@ chrome.runtime.onMessage.addListener((message: MessageType) => {
   switch (message.type) {
     case 'SETTINGS_CHANGED':
       // Re-read full settings from storage to ensure API keys are included
-      loadSettingsFromStorage().then((loaded) => {
-        settings = loaded;
-        applyCSSVariables(settings);
-        translator.configure(settings);
-      }).catch(() => {
-        // Fallback: just merge the partial update
-        settings = { ...settings, ...message.payload };
-        applyCSSVariables(settings);
-        translator.configure(settings);
-      });
-
-      // Update all active handlers
-      for (const h of activeHandlers) {
-        h.updateSettings(settings);
-      }
+      loadSettingsFromStorage()
+        .catch(() => ({ ...settings, ...message.payload }))
+        .then((loaded) => {
+          settings = loaded;
+          applyCSSVariables(settings);
+          translator.configure(settings);
+          for (const h of activeHandlers) {
+            h.updateSettings(settings);
+          }
+        });
       break;
 
     case 'TOGGLE_ENABLED':
@@ -275,20 +270,6 @@ chrome.runtime.onMessage.addListener((message: MessageType) => {
       break;
     }
 
-    case 'TOGGLE_FURIGANA':
-      settings.showFurigana = !settings.showFurigana;
-      for (const h of activeHandlers) h.updateSettings(settings);
-      break;
-
-    case 'TOGGLE_TRANSLATION':
-      settings.showTranslation = !settings.showTranslation;
-      for (const h of activeHandlers) h.updateSettings(settings);
-      break;
-
-    case 'TOGGLE_ROMAJI':
-      settings.showRomaji = !settings.showRomaji;
-      for (const h of activeHandlers) h.updateSettings(settings);
-      break;
   }
 });
 

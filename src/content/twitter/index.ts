@@ -107,11 +107,17 @@ export class TwitterHandler implements SiteHandler {
    * If webpageMode changed, restart to re-initialize hover/inline state.
    */
   updateSettings(settings: UserSettings): void {
-    const modeChanged = this.settings.webpageMode !== settings.webpageMode;
+    const prev = this.settings;
     this.settings = settings;
 
-    if (modeChanged) {
-      log.info('webpageMode changed, restarting');
+    const needsRestart =
+      settings.webpageMode !== prev.webpageMode ||
+      settings.showFurigana !== prev.showFurigana ||
+      settings.showTranslation !== prev.showTranslation ||
+      settings.showRomaji !== prev.showRomaji;
+
+    if (needsRestart) {
+      log.info('Rendering settings changed, restarting');
       this.stop();
       // Recreate sub-handlers with fresh hoverTargets
       this.tweetHandler = new TweetHandler(settings, this.hoverTargets);

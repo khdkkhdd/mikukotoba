@@ -4,7 +4,7 @@ import { translator } from '@/core/translator';
 import { escapeHtmlWithBreaks } from '@/content/shared/dom-utils';
 import { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
-import { createStyledFuriganaBlock } from '@/content/shared/renderers/furigana-block';
+import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
 import { createInlineBracket } from '@/content/shared/renderers/inline-bracket';
 import { addSpoilerBehavior } from '@/content/shared/renderers/spoiler';
 import {
@@ -133,8 +133,11 @@ export class TweetHandler {
   }
 
   /**
-   * Hover mode + furigana: insert furigana inline, register furigana block as hover target.
-   * Translation is deferred to the shared HoverTooltip on mouseover.
+   * Hover mode + furigana: clone element with ruby annotations, hide original.
+   *
+   * The clone preserves all interactive elements (links, @mentions, #hashtags)
+   * while adding ruby furigana above kanji. The clone is registered as hover
+   * target for translation on mouseover.
    */
   private async processHoverWithFurigana(element: HTMLElement, text: string): Promise<void> {
     if (this.tracker.isProcessedWithSameText(element, text)) return;
@@ -153,17 +156,15 @@ export class TweetHandler {
       if (element.innerText?.trim() !== text) return;
 
       element.classList.remove('jp-furigana-hidden');
-      const furigana = createStyledFuriganaBlock(result, element, {
-        classPrefix: 'jp-twitter',
+      const clone = createRubyClone(element, result.tokens, {
         translationAttr: TRANSLATION_ATTR,
       });
-      element.insertAdjacentElement('afterend', furigana);
-      this.tracker.trackInjected(furigana);
+      element.insertAdjacentElement('afterend', clone);
+      this.tracker.trackInjected(clone);
       element.classList.add('jp-furigana-hidden');
 
-      // Register furigana block as hover target with original text
-      // (furigana innerText includes readings, so store original separately)
-      this.registerHoverTarget(furigana, text);
+      // Register clone as hover target with original text
+      this.registerHoverTarget(clone, text);
       this.status?.translated();
     } catch (e) {
       log.error('Hover+furigana failed:', e);
@@ -245,6 +246,10 @@ export class TweetHandler {
 
   /**
    * Mode A: Insert translation block below the original element.
+   *
+   * When furigana is enabled, the original is replaced with a ruby-annotated
+   * clone that preserves all interactive elements (links, @mentions, #hashtags)
+   * while showing furigana above kanji.
    */
   private insertInlineBlock(target: HTMLElement, result: TranslationResult, text: string): void {
     this.tracker.removeExistingTranslation(target);
@@ -253,15 +258,13 @@ export class TweetHandler {
     let insertAfter: HTMLElement = target;
 
     if (this.settings.showFurigana) {
-      // Styled furigana block inheriting original text's visual style
-      const furigana = createStyledFuriganaBlock(result, target, {
-        classPrefix: 'jp-twitter',
+      const clone = createRubyClone(target, result.tokens, {
         translationAttr: TRANSLATION_ATTR,
       });
-      target.insertAdjacentElement('afterend', furigana);
-      this.tracker.trackInjected(furigana);
+      target.insertAdjacentElement('afterend', clone);
+      this.tracker.trackInjected(clone);
       target.classList.add('jp-furigana-hidden');
-      insertAfter = furigana;
+      insertAfter = clone;
     }
 
     const div = createInlineBlock(result, this.settings, {

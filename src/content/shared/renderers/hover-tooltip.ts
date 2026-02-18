@@ -40,6 +40,8 @@ export class HoverTooltip {
   private hideTimeout: ReturnType<typeof setTimeout> | null = null;
   private isMouseOverPopup = false;
   private isSelecting = false;
+  private lastMouseX = 0;
+  private lastMouseY = 0;
 
   constructor(
     settings: UserSettings,
@@ -203,6 +205,9 @@ export class HoverTooltip {
       return;
     }
 
+    this.lastMouseX = e.clientX;
+    this.lastMouseY = e.clientY;
+
     const result = this.options.getTargetAtPoint(e.clientX, e.clientY);
     if (!result) {
       this.hidePopup();
@@ -237,7 +242,7 @@ export class HoverTooltip {
       <hr class="ht-divider">
       <div class="ht-loading"><span class="ht-spinner"></span> 번역 중...</div>
     `);
-    this.positionPopup(anchor);
+    this.positionPopup();
   }
 
   private showResult(anchor: HTMLElement, result: TranslationResult, originalText?: string): void {
@@ -256,7 +261,7 @@ export class HoverTooltip {
     html += `<div class="ht-engine-badge">${formatEngineBadge(result)}${retryBtn}</div>`;
 
     this.setPopupContent(html);
-    this.positionPopup(anchor);
+    this.positionPopup();
 
     // Attach retry handler
     if (this.onRetranslate) {
@@ -289,12 +294,11 @@ export class HoverTooltip {
     this.shadowRoot.appendChild(content);
   }
 
-  private positionPopup(anchor: HTMLElement): void {
+  private positionPopup(): void {
     if (!this.popup) return;
 
-    const rect = anchor.getBoundingClientRect();
-    let left = rect.left;
-    let top = rect.bottom + 4;
+    let left = this.lastMouseX + 12;
+    let top = this.lastMouseY + 16;
 
     this.popup.style.display = 'block';
     this.popup.style.left = '0px';
@@ -302,10 +306,10 @@ export class HoverTooltip {
     const popupRect = this.popup.getBoundingClientRect();
 
     if (left + popupRect.width > window.innerWidth) {
-      left = window.innerWidth - popupRect.width - 8;
+      left = this.lastMouseX - popupRect.width - 8;
     }
     if (top + popupRect.height > window.innerHeight) {
-      top = rect.top - popupRect.height - 4;
+      top = this.lastMouseY - popupRect.height - 8;
     }
 
     this.popup.style.left = `${Math.max(0, left)}px`;

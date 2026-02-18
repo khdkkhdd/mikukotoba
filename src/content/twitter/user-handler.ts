@@ -3,6 +3,7 @@ import type { StatusIndicator } from '@/content/shared/status-indicator';
 import { translator } from '@/core/translator';
 import { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
+import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
 import {
   TRANSLATION_ATTR,
   PROCESSED_ATTR,
@@ -70,13 +71,29 @@ export class UserHandler {
   }
 
   /**
-   * Process a UserDescription (bio) element (Mode A: inline block).
+   * Process a UserDescription (bio) element.
+   * Respects webpageMode: hover → register as hover target, off → skip,
+   * otherwise → inline block (Mode A).
    */
   async processUserDescription(element: HTMLElement): Promise<void> {
     const text = element.innerText?.trim();
     if (!text) return;
     if (!isJapaneseText(element)) return;
     if (this.tracker.isProcessed(element)) return;
+
+    const mode = this.settings.webpageMode;
+    if (mode === 'off') return;
+
+    if (mode === 'hover') {
+      if (this.settings.showFurigana) {
+        await this.processHoverWithFurigana(element, text);
+      } else {
+        this.tracker.markProcessed(element);
+        this.hoverTargets.add(element);
+        element.classList.add('jp-twitter-hover-target');
+      }
+      return;
+    }
 
     this.tracker.markProcessed(element);
     markProcessed(element);
@@ -129,6 +146,9 @@ export class UserHandler {
     }
 
     // Find bio text within the cell (usually the last text-heavy div)
+    const mode = this.settings.webpageMode;
+    if (mode === 'off') return;
+
     const allDivs = element.querySelectorAll<HTMLElement>(':scope > div > div');
     for (const div of allDivs) {
       const text = div.innerText?.trim();
@@ -137,13 +157,18 @@ export class UserHandler {
       if (div.querySelector('button')) continue;
 
       if (isJapaneseText(div)) {
-        markProcessed(div);
-        try {
-          const result = await translator.translate(text);
-          if (!div.isConnected) continue;
-          this.insertBioTranslation(div, result, true, text);
-        } catch {
-          // ignore
+        if (mode === 'hover') {
+          this.hoverTargets.add(div);
+          div.classList.add('jp-twitter-hover-target');
+        } else {
+          markProcessed(div);
+          try {
+            const result = await translator.translate(text);
+            if (!div.isConnected) continue;
+            this.insertBioTranslation(div, result, true, text);
+          } catch {
+            // ignore
+          }
         }
         break;
       }
@@ -185,6 +210,48 @@ export class UserHandler {
     }
   }
 
+  // ──────────────── Hover + Furigana ────────────────
+
+  /**
+   * Hover mode + furigana: clone element with ruby annotations, hide original.
+   * Registers the clone as a hover target for translation on mouseover.
+   */
+  private async processHoverWithFurigana(element: HTMLElement, text: string): Promise<void> {
+    if (this.tracker.isProcessedWithSameText(element, text)) return;
+
+    if (this.tracker.isProcessed(element)) {
+      this.tracker.removeExistingTranslation(element);
+    }
+
+    this.tracker.markProcessed(element, text);
+    markProcessed(element);
+    this.status?.translating();
+
+    try {
+      const result = await translator.translate(text);
+      if (!element.isConnected) return;
+      if (element.innerText?.trim() !== text) return;
+
+      element.classList.remove('jp-furigana-hidden');
+      const clone = createRubyClone(element, result.tokens, {
+        translationAttr: TRANSLATION_ATTR,
+      });
+      element.insertAdjacentElement('afterend', clone);
+      this.tracker.trackInjected(clone);
+      element.classList.add('jp-furigana-hidden');
+
+      // Register clone as hover target with original text
+      this.hoverTargets.add(clone);
+      clone.classList.add('jp-twitter-hover-target');
+      clone.setAttribute('data-jp-hover-text', text);
+      this.status?.translated();
+    } catch (e) {
+      log.error('Hover+furigana failed:', e);
+      this.status?.failed();
+      this.tracker.unmarkProcessed(element);
+    }
+  }
+
   // ──────────────── Mode A: Inline Bio Translation ────────────────
 
   private insertBioTranslation(
@@ -194,6 +261,19 @@ export class UserHandler {
     text?: string,
   ): void {
     this.tracker.removeExistingTranslation(target);
+    target.classList.remove('jp-furigana-hidden');
+
+    let insertAfter: HTMLElement = target;
+
+    if (this.settings.showFurigana) {
+      const clone = createRubyClone(target, result.tokens, {
+        translationAttr: TRANSLATION_ATTR,
+      });
+      target.insertAdjacentElement('afterend', clone);
+      this.tracker.trackInjected(clone);
+      target.classList.add('jp-furigana-hidden');
+      insertAfter = clone;
+    }
 
     const div = createInlineBlock(result, this.settings, {
       className: 'jp-twitter-translation',
@@ -201,10 +281,11 @@ export class UserHandler {
       classPrefix: 'jp-twitter',
       compact,
       spoiler: true,
+      skipFurigana: this.settings.showFurigana,
       onRetranslate: text ? () => translator.retranslate(text) : undefined,
     });
 
-    target.insertAdjacentElement('afterend', div);
+    insertAfter.insertAdjacentElement('afterend', div);
     this.tracker.trackInjected(div);
   }
 

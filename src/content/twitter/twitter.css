@@ -73,6 +73,16 @@
   color: var(--jp-inline-color-translation, #555);
 }
 
+/* Ruby-annotated clone */
+.jp-ruby-annotated {
+  line-height: 2.2em;
+}
+
+.jp-ruby-annotated ruby rt {
+  font-size: calc(var(--jp-inline-furigana-scale, 0.55) * 1em);
+  color: var(--jp-inline-color-furigana, #888);
+}
+
 /* Hover target indicator (webpageMode: 'hover') */
 .jp-twitter-hover-target {
   cursor: help;

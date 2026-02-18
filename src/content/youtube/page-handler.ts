@@ -9,6 +9,7 @@ import { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { BatchedObserver } from '@/content/shared/batched-observer';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
 import { createStyledFuriganaBlock } from '@/content/shared/renderers/furigana-block';
+import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
 import { HoverTooltip } from '@/content/shared/renderers/hover-tooltip';
 import { MorphologicalAnalyzer } from '@/core/analyzer/morphological';
 import {
@@ -53,6 +54,7 @@ export class YouTubePageHandler implements SiteHandler {
   private hoverTargets = new WeakSet<HTMLElement>();
   private scrollHandler: (() => void) | null = null;
   private analyzer: MorphologicalAnalyzer | null = null;
+  private analyzerReady: Promise<void> | null = null;
 
   constructor(settings: UserSettings) {
     this.settings = settings;
@@ -183,11 +185,16 @@ export class YouTubePageHandler implements SiteHandler {
   }
 
   updateSettings(settings: UserSettings): void {
-    const oldMode = this.settings.webpageMode;
+    const prev = this.settings;
     this.settings = settings;
 
-    // If mode changed, full restart
-    if (settings.webpageMode !== oldMode) {
+    const needsRestart =
+      settings.webpageMode !== prev.webpageMode ||
+      settings.showFurigana !== prev.showFurigana ||
+      settings.showTranslation !== prev.showTranslation ||
+      settings.showRomaji !== prev.showRomaji;
+
+    if (needsRestart) {
       this.stop();
       if (settings.webpageMode !== 'off') {
         this.start();
@@ -239,6 +246,17 @@ export class YouTubePageHandler implements SiteHandler {
   private async processElement(el: HTMLElement, category: YTElementCategory): Promise<void> {
     const mode = this.settings.webpageMode;
     if (mode === 'off') return;
+
+    // Rich content (comments, posts, descriptions, etc.): use ruby clone
+    // to preserve links, @mentions, timestamps, and other interactive elements.
+    if (category === 'rich') {
+      if (mode === 'hover') {
+        await this.registerRichHoverTarget(el);
+      } else {
+        await this.processRichContent(el);
+      }
+      return;
+    }
 
     // Hover mode: register as hover target, don't translate
     if (mode === 'hover') {
@@ -375,14 +393,17 @@ export class YouTubePageHandler implements SiteHandler {
     this.tracker.markProcessed(el, text);
 
     if (this.settings.showFurigana) {
-      // Lazy-init morphological analyzer
-      if (!this.analyzer) {
+      // Lazy-init morphological analyzer (promise-based to prevent race)
+      if (!this.analyzerReady) {
         this.analyzer = new MorphologicalAnalyzer();
-        await this.analyzer.init();
+        this.analyzerReady = this.analyzer.init();
       }
+      await this.analyzerReady;
 
       try {
-        const tokens = await this.analyzer.analyze(text);
+        const tokens = await this.analyzer!.analyze(text);
+        // After await, the element may have been detached by YouTube re-renders
+        if (!el.isConnected) return;
         const hasKanji = tokens.some((t: { isKanji: boolean; reading: string; surface: string }) => t.isKanji && t.reading !== t.surface);
         if (hasKanji) {
           const anchor = this.getInsertionAnchor(el);
@@ -401,6 +422,54 @@ export class YouTubePageHandler implements SiteHandler {
           furiganaBlock.dataset.jpOriginalText = text;
           this.hoverTargets.add(furiganaBlock);
           furiganaBlock.classList.add('jp-yt-hover-target');
+          return;
+        }
+      } catch {
+        // Fall through to basic registration
+      }
+    }
+
+    this.hoverTargets.add(el);
+    el.classList.add('jp-yt-hover-target');
+  }
+
+  /**
+   * Register a rich content element as a hover target using ruby clone.
+   * Uses ruby clone so furigana appears above kanji while links stay clickable.
+   * Falls back to simple registration if no kanji tokens are found.
+   */
+  private async registerRichHoverTarget(el: HTMLElement): Promise<void> {
+    const text = el.innerText?.trim();
+    if (!text || !containsJapaneseLike(text)) return;
+    if (this.tracker.isProcessed(el)) return;
+    this.tracker.markProcessed(el, text);
+
+    if (this.settings.showFurigana) {
+      if (!this.analyzerReady) {
+        this.analyzer = new MorphologicalAnalyzer();
+        this.analyzerReady = this.analyzer.init();
+      }
+      await this.analyzerReady;
+
+      try {
+        const tokens = await this.analyzer!.analyze(text);
+        if (!el.isConnected) return;
+        const hasKanji = tokens.some((t: { isKanji: boolean; reading: string; surface: string }) => t.isKanji && t.reading !== t.surface);
+        if (hasKanji) {
+          const anchor = this.getInsertionAnchor(el);
+          this.removeAdjacentTranslation(anchor);
+          el.classList.remove('jp-furigana-hidden');
+
+          const clone = createRubyClone(el, tokens, {
+            translationAttr: YT_TRANSLATION_ATTR,
+          });
+          anchor.insertAdjacentElement('afterend', clone);
+          this.tracker.trackInjected(clone);
+          el.classList.add('jp-furigana-hidden');
+
+          clone.dataset.jpOriginalText = text;
+          this.hoverTargets.add(clone);
+          clone.classList.add('jp-yt-hover-target');
           return;
         }
       } catch {
@@ -473,14 +542,21 @@ export class YouTubePageHandler implements SiteHandler {
   }
 
   /**
-   * Remove adjacent translation elements after an anchor.
+   * Remove all translation sibling elements after an anchor.
+   *
+   * Walks ALL following siblings (not just consecutive ones) because
+   * YouTube's Polymer may insert non-translation elements (badges, etc.)
+   * between the anchor and our translation blocks, which would cause
+   * the old adjacent-only loop to miss stale translations.
    */
   private removeAdjacentTranslation(anchor: HTMLElement): void {
-    let orphan = anchor.nextElementSibling;
-    while (orphan?.hasAttribute(YT_TRANSLATION_ATTR)) {
-      const next = orphan.nextElementSibling;
-      orphan.remove();
-      orphan = next;
+    let sibling = anchor.nextElementSibling;
+    while (sibling) {
+      const next = sibling.nextElementSibling;
+      if (sibling.hasAttribute(YT_TRANSLATION_ATTR)) {
+        sibling.remove();
+      }
+      sibling = next;
     }
   }
 
@@ -545,7 +621,7 @@ export class YouTubePageHandler implements SiteHandler {
     }
   }
 
-  // ──────────────── Description Expand Detection ────────────────
+  // ──────────────── Description Handling ────────────────
 
   private attachDescriptionWatcher(expander: HTMLElement): void {
     this.descriptionObserver?.disconnect();
@@ -557,7 +633,12 @@ export class YouTubePageHandler implements SiteHandler {
           );
           if (desc) {
             log.debug('Description expanded, processing');
-            this.processElement(desc, 'main');
+            // Route through processElement's mode logic (rich category)
+            if (this.settings.webpageMode === 'hover') {
+              this.registerRichHoverTarget(desc);
+            } else {
+              this.processRichContent(desc);
+            }
           }
         }
       }
@@ -566,6 +647,125 @@ export class YouTubePageHandler implements SiteHandler {
     this.descriptionObserver.observe(expander, {
       attributes: true,
       attributeFilter: ['is-expanded'],
+    });
+  }
+
+  /**
+   * Process rich content (comments, descriptions, community posts, etc.)
+   * with paragraph-level splitting.
+   *
+   * When furigana is enabled, the original element is replaced with a
+   * ruby-annotated clone that preserves all interactive elements (links,
+   * @mentions, timestamps). Translation blocks are appended after.
+   */
+  private async processRichContent(el: HTMLElement): Promise<void> {
+    const mode = this.settings.webpageMode;
+    if (mode === 'off') return;
+
+    const fullText = el.innerText?.trim();
+    if (!fullText || !containsJapaneseLike(fullText)) return;
+    if (this.tracker.isProcessedWithSameText(el, fullText)) return;
+
+    const anchor = this.getInsertionAnchor(el);
+
+    // Remove existing translation if text changed (re-render)
+    if (this.tracker.isProcessed(el)) {
+      this.removeAdjacentTranslation(anchor);
+      el.classList.remove('jp-furigana-hidden');
+    }
+
+    this.tracker.markProcessed(el, fullText);
+    this.status?.translating();
+
+    try {
+      const paragraphs = this.splitRichText(fullText);
+
+      if (paragraphs.length === 0) {
+        this.status?.translated();
+        return;
+      }
+
+      // Translate paragraphs sequentially to respect rate limits
+      const results: { text: string; result: TranslationResult }[] = [];
+      for (const para of paragraphs) {
+        if (!el.isConnected) return;
+        const result = await translator.translate(para);
+        results.push({ text: para, result });
+      }
+
+      if (!el.isConnected) return;
+      if (el.innerText?.trim() !== fullText) return; // text changed during translation
+
+      this.removeAdjacentTranslation(anchor);
+
+      // Furigana: replace original with ruby-annotated clone
+      const showFurigana = mode === 'furigana-only' ||
+        (mode === 'inline' && this.settings.showFurigana);
+      let insertAfter: HTMLElement = anchor;
+
+      if (showFurigana) {
+        // Merge all tokens for the ruby clone
+        const allTokens = results.flatMap(r => r.result.tokens);
+        el.classList.remove('jp-furigana-hidden');
+        const clone = createRubyClone(el, allTokens, {
+          translationAttr: YT_TRANSLATION_ATTR,
+        });
+        anchor.insertAdjacentElement('afterend', clone);
+        this.tracker.trackInjected(clone);
+        el.classList.add('jp-furigana-hidden');
+        insertAfter = clone;
+      }
+
+      // furigana-only: no translation block needed
+      if (mode === 'furigana-only') {
+        this.status?.translated();
+        return;
+      }
+
+      // inline: add translation container after clone/anchor
+      const container = document.createElement('div');
+      container.className = 'jp-yt-desc-translations';
+      container.setAttribute(YT_TRANSLATION_ATTR, 'true');
+
+      for (const { text: paraText, result } of results) {
+        const block = createInlineBlock(result, this.settings, {
+          className: 'jp-yt-translation',
+          classPrefix: 'jp-yt',
+          spoiler: true,
+          skipFurigana: showFurigana,
+          onRetranslate: () => translator.retranslate(paraText),
+        });
+        container.appendChild(block);
+      }
+
+      insertAfter.insertAdjacentElement('afterend', container);
+      this.tracker.trackInjected(container);
+      this.status?.translated();
+    } catch (e) {
+      log.warn('Rich content translation failed:', e);
+      this.status?.failed();
+      this.tracker.unmarkProcessed(el);
+    }
+  }
+
+  /**
+   * Split rich text into translatable paragraphs.
+   * Filters out URL-only lines and non-Japanese segments.
+   */
+  private splitRichText(text: string): string[] {
+    // Split by double newlines first
+    let paragraphs = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+
+    // If single long paragraph, split by single newlines
+    if (paragraphs.length === 1 && paragraphs[0].length > 500) {
+      paragraphs = paragraphs[0].split(/\n/).map(p => p.trim()).filter(Boolean);
+    }
+
+    return paragraphs.filter(p => {
+      if (!containsJapaneseLike(p)) return false;
+      // Skip paragraphs that are mainly URLs
+      const withoutUrls = p.replace(/https?:\/\/\S+/g, '').trim();
+      return withoutUrls.length > 0 && containsJapaneseLike(withoutUrls);
     });
   }
 }

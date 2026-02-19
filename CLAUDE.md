@@ -1,17 +1,28 @@
 # JP Helper
 
-Chrome extension for Japanese language learning: furigana overlay, translation, and vocabulary management.
+Monorepo for Japanese language learning: Chrome extension + iOS mobile app.
+
+## Structure
+
+```
+packages/
+  shared/     # 공유 코드 (타입, Drive API, sync-core)
+  extension/  # Chrome 확장
+  mobile/     # React Native (Expo) iOS 앱
+```
 
 ## Stack
 
-TypeScript, Vite, Chrome Extension Manifest V3 (CRXJS plugin).
-Translation: Papago + LLM (Claude/OpenAI/Gemini). Morphology: Kuromoji + Kuroshiro.
+- **shared**: TypeScript (순수 fetch 기반 Drive API, 동기화 로직)
+- **extension**: TypeScript, Vite, Chrome Extension Manifest V3 (CRXJS). Papago + LLM, Kuromoji + Kuroshiro.
+- **mobile**: Expo (React Native), expo-sqlite, ts-fsrs, Zustand, expo-router
 
 ## Build
 
-- dev: `npm run dev` (vite build --watch)
-- build: `npm run build` (tsc --noEmit && vite build)
-- output: `dist/`
+- extension dev: `cd packages/extension && npm run dev`
+- extension build: `cd packages/extension && npm run build`
+- mobile: `cd packages/mobile && npx expo start`
+- workspace install: `npm install` (루트에서)
 
 ## Communication
 
@@ -27,4 +38,11 @@ Task context lives in `context.md` at repo root.
 
 ## Architecture
 
-Three-layer dependency: Handler → Shared → Core (no reverse). See `context.md` for architecture details, storage keys, and key patterns.
+### Extension
+Three-layer dependency: Handler → Shared → Core (no reverse). See `context.md` for architecture details.
+
+### Mobile
+expo-router 파일 기반 라우팅. SQLite 로컬 DB + FSRS 스케줄링. shared의 DriveAPI/sync-core로 Drive 동기화.
+
+### Shared
+VocabEntry 타입, DriveAPI (순수 fetch), mergeEntries/cleanTombstones 동기화 함수. Chrome/RN 양쪽에서 사용.

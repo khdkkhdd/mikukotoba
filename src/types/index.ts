@@ -213,7 +213,8 @@ export type MessageType =
   | { type: 'VOCAB_UPDATE'; payload: VocabEntry }
   | { type: 'VOCAB_DELETE'; payload: { id: string; date: string } }
   | { type: 'VOCAB_SEARCH'; payload: { query: string } }
-  | { type: 'VOCAB_EXPORT' };
+  | { type: 'VOCAB_EXPORT' }
+  | { type: 'VOCAB_IMPORT'; payload: { entries: VocabEntry[] } };
 
 // 기본 설정값
 export const DEFAULT_SETTINGS: UserSettings = {

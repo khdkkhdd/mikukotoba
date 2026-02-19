@@ -5,6 +5,7 @@ import { escapeHtmlWithBreaks } from '@/content/shared/dom-utils';
 import { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
 import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
+import { onWordClick } from '@/content/vocab/word-click-callback';
 import { createInlineBracket } from '@/content/shared/renderers/inline-bracket';
 import { addSpoilerBehavior } from '@/content/shared/renderers/spoiler';
 import {
@@ -158,6 +159,7 @@ export class TweetHandler {
       element.classList.remove('jp-furigana-hidden');
       const clone = createRubyClone(element, result.tokens, {
         translationAttr: TRANSLATION_ATTR,
+        onWordClick,
       });
       element.insertAdjacentElement('afterend', clone);
       this.tracker.trackInjected(clone);
@@ -260,6 +262,7 @@ export class TweetHandler {
     if (this.settings.showFurigana) {
       const clone = createRubyClone(target, result.tokens, {
         translationAttr: TRANSLATION_ATTR,
+        onWordClick,
       });
       target.insertAdjacentElement('afterend', clone);
       this.tracker.trackInjected(clone);
@@ -274,6 +277,7 @@ export class TweetHandler {
       spoiler: true,
       skipFurigana: this.settings.showFurigana,
       onRetranslate: () => translator.retranslate(text),
+      onWordClick,
     });
 
     insertAfter.insertAdjacentElement('afterend', div);

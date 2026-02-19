@@ -5,6 +5,7 @@ import type { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { translator } from '@/core/translator';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
 import { escapeHtml } from '@/content/shared/dom-utils';
+import { onWordClick } from '@/content/vocab/word-click-callback';
 
 /**
  * Inline translation mode: inserts furigana and translation
@@ -70,6 +71,7 @@ export class InlineTranslator {
           spoiler: true,
           skipFurigana: true,
           onRetranslate: () => translator.retranslate(block.text),
+          onWordClick,
         });
 
         target.insertAdjacentElement('afterend', translationEl);

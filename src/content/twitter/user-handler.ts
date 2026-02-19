@@ -4,6 +4,7 @@ import { translator } from '@/core/translator';
 import { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
 import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
+import { onWordClick } from '@/content/vocab/word-click-callback';
 import {
   TRANSLATION_ATTR,
   PROCESSED_ATTR,
@@ -235,6 +236,7 @@ export class UserHandler {
       element.classList.remove('jp-furigana-hidden');
       const clone = createRubyClone(element, result.tokens, {
         translationAttr: TRANSLATION_ATTR,
+        onWordClick,
       });
       element.insertAdjacentElement('afterend', clone);
       this.tracker.trackInjected(clone);
@@ -268,6 +270,7 @@ export class UserHandler {
     if (this.settings.showFurigana) {
       const clone = createRubyClone(target, result.tokens, {
         translationAttr: TRANSLATION_ATTR,
+        onWordClick,
       });
       target.insertAdjacentElement('afterend', clone);
       this.tracker.trackInjected(clone);
@@ -283,6 +286,7 @@ export class UserHandler {
       spoiler: true,
       skipFurigana: this.settings.showFurigana,
       onRetranslate: text ? () => translator.retranslate(text) : undefined,
+      onWordClick,
     });
 
     insertAfter.insertAdjacentElement('afterend', div);

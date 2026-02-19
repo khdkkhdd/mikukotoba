@@ -14,23 +14,29 @@ interface CacheIndex {
 const memoryCache = new Map<string, TranslationResult>();
 const MAX_MEMORY_CACHE = 200;
 
-function hashKey(text: string): string {
+function hashKey(text: string, source?: string): string {
+  const input = source ? `${source}:${text}` : text;
   let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    const char = text.charCodeAt(i);
+  for (let i = 0; i < input.length; i++) {
+    const char = input.charCodeAt(i);
     hash = ((hash << 5) - hash + char) | 0;
   }
   return CACHE_KEY_PREFIX + Math.abs(hash).toString(36);
 }
 
+function memoryCacheKey(text: string, source?: string): string {
+  return source ? `${source}:${text}` : text;
+}
+
 export class TranslationCache {
-  async get(text: string): Promise<TranslationResult | null> {
+  async get(text: string, source?: string): Promise<TranslationResult | null> {
     // Check memory cache first
-    const memResult = memoryCache.get(text);
+    const memKey = memoryCacheKey(text, source);
+    const memResult = memoryCache.get(memKey);
     if (memResult) return memResult;
 
     // Check storage cache
-    const key = hashKey(text);
+    const key = hashKey(text, source);
     try {
       const data = await chrome.storage.local.get(key);
       const entry: CacheEntry | undefined = data[key];
@@ -44,7 +50,7 @@ export class TranslationCache {
       }
 
       // Promote to memory cache
-      setMemoryCache(text, entry.result);
+      setMemoryCache(memKey, entry.result);
 
       return entry.result;
     } catch {
@@ -52,11 +58,12 @@ export class TranslationCache {
     }
   }
 
-  async set(text: string, result: TranslationResult): Promise<void> {
+  async set(text: string, result: TranslationResult, source?: string): Promise<void> {
     // Update memory cache
-    setMemoryCache(text, result);
+    const memKey = memoryCacheKey(text, source);
+    setMemoryCache(memKey, result);
 
-    const key = hashKey(text);
+    const key = hashKey(text, source);
     const entry: CacheEntry = {
       result,
       timestamp: Date.now(),
@@ -77,10 +84,11 @@ export class TranslationCache {
     }
   }
 
-  async delete(text: string): Promise<void> {
-    memoryCache.delete(text);
+  async delete(text: string, source?: string): Promise<void> {
+    const memKey = memoryCacheKey(text, source);
+    memoryCache.delete(memKey);
 
-    const key = hashKey(text);
+    const key = hashKey(text, source);
     try {
       await chrome.storage.local.remove(key);
 

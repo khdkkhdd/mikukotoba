@@ -27,4 +27,6 @@ Task context lives in `context.md` at repo root.
 
 ## Refactoring
 
-Currently in refactoring phase. Read `docs/refactoring-guide.md` first — it contains the complete plan with step-by-step instructions, code examples, and verification criteria. Progress is tracked in `context.md`.
+Currently in refactoring phase (Phase 4~5 remaining). Read these in order:
+1. `context.md` — current progress and remaining tasks
+2. `docs/refactoring-guide-phase4-5.md` — detailed guide for Phase 4~5 with file references, patterns, and work rules

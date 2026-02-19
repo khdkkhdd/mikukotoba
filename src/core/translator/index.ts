@@ -21,6 +21,10 @@ export class Translator {
   private settings: UserSettings | null = null;
   private userCorrections: UserCorrection[] = [];
 
+  // Complexity feedback: scores of retranslated texts (used to adjust threshold)
+  private retranslateScores: number[] = [];
+  private readonly RETRANSLATE_HISTORY_SIZE = 20;
+
   // Concurrency control
   private pendingRequests = 0;
   private readonly maxConcurrent = 3;
@@ -30,6 +34,9 @@ export class Translator {
     resolve: (result: TranslationResult) => void;
     reject: (error: Error) => void;
   }> = [];
+
+  // In-flight dedup: map of normalized text → pending promise
+  private inflight = new Map<string, Promise<TranslationResult>>();
 
   constructor() {
     this.analyzer = new MorphologicalAnalyzer();
@@ -79,12 +86,59 @@ export class Translator {
 
   async retranslate(text: string): Promise<TranslationResult> {
     const normalized = normalizeSpacedJapanese(text);
-    await this.cache.delete(normalized);
+    const source = this.getCacheSource();
+
+    // Record complexity score for feedback learning
+    const cached = await this.cache.get(normalized, source);
+    if (cached && cached.complexityScore !== undefined) {
+      this.recordRetranslateScore(cached.complexityScore);
+    }
+
+    await this.cache.delete(normalized, source);
     return this.enqueue(text, { skipCache: true, forceLLM: true });
+  }
+
+  /**
+   * Record the complexity score of a retranslated text.
+   * If enough retranslates happen at scores below the threshold,
+   * it suggests the threshold should be lowered.
+   */
+  private recordRetranslateScore(score: number): void {
+    this.retranslateScores.push(score);
+    if (this.retranslateScores.length > this.RETRANSLATE_HISTORY_SIZE) {
+      this.retranslateScores.shift();
+    }
+
+    // Adjust threshold if we have enough data
+    if (this.retranslateScores.length >= 5 && this.settings) {
+      const threshold = this.settings.complexityThreshold;
+      const belowThreshold = this.retranslateScores.filter(s => s < threshold);
+      // If >60% of retranslates were below threshold, nudge threshold down
+      if (belowThreshold.length / this.retranslateScores.length > 0.6) {
+        const avgScore = belowThreshold.reduce((a, b) => a + b, 0) / belowThreshold.length;
+        const newThreshold = Math.max(1, Math.round(avgScore));
+        if (newThreshold < threshold) {
+          log.info('Complexity threshold adjusted:', threshold, '→', newThreshold,
+            `(${belowThreshold.length}/${this.retranslateScores.length} retranslates below threshold)`);
+          this.settings.complexityThreshold = newThreshold;
+        }
+      }
+    }
   }
 
   private enqueue(text: string, options?: { skipCache?: boolean; forceLLM?: boolean }): Promise<TranslationResult> {
     const shortText = text.length > 30 ? text.slice(0, 30) + '…' : text;
+    const normalized = normalizeSpacedJapanese(text);
+
+    // In-flight dedup: if same text is already being translated, reuse the promise
+    if (!options?.skipCache) {
+      const existing = this.inflight.get(normalized);
+      if (existing) {
+        log.debug('Dedup HIT:', shortText);
+        return existing.then(r => ({ ...r, original: text }));
+      }
+    }
+
     // Concurrency control
     if (this.pendingRequests >= this.maxConcurrent) {
       log.debug('Queued:', shortText, `pending=${this.pendingRequests}, queued=${this.queue.length}`);
@@ -95,11 +149,17 @@ export class Translator {
 
     log.debug('Immediate:', shortText, `pending=${this.pendingRequests}`);
     this.pendingRequests++;
-    return this.doTranslate(text, options)
+    const promise = this.doTranslate(text, options)
       .finally(() => {
         this.pendingRequests--;
+        this.inflight.delete(normalized);
         this.processQueue();
       });
+
+    if (!options?.skipCache) {
+      this.inflight.set(normalized, promise);
+    }
+    return promise;
   }
 
   private processQueue(): void {
@@ -116,6 +176,15 @@ export class Translator {
       });
   }
 
+  /** Get current source identifier for context-aware caching */
+  private getCacheSource(): string | undefined {
+    try {
+      return typeof location !== 'undefined' ? location.hostname : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   private async doTranslate(
     text: string,
     opts?: { skipCache?: boolean; forceLLM?: boolean },
@@ -128,10 +197,11 @@ export class Translator {
     const workText = normalized;
     const shortText = workText.length > 30 ? workText.slice(0, 30) + '…' : workText;
     const t0 = Date.now();
+    const cacheSource = this.getCacheSource();
 
     // 1. Cache check
     if (!opts?.skipCache) {
-      const cached = await this.cache.get(workText);
+      const cached = await this.cache.get(workText, cacheSource);
       if (cached) {
         log.debug('Cache HIT:', shortText);
         return { ...cached, original: text, fromCache: true };
@@ -189,7 +259,7 @@ export class Translator {
     if (preferLLM && llmClient.isConfigured()) {
       try {
         const context = this.contextManager.getContext();
-        korean = await llmClient.translate(workText, context);
+        korean = await llmClient.translate(workText, context, this.settings?.learningLevel);
         engine = this.activePlatform;
       } catch (err) {
         log.warn(`FAIL [${this.activePlatform}]:`, shortText, err);
@@ -213,7 +283,7 @@ export class Translator {
         if (llmClient.isConfigured()) {
           log.info('Fallback: papago →', this.activePlatform);
           const context = this.contextManager.getContext();
-          korean = await llmClient.translate(workText, context);
+          korean = await llmClient.translate(workText, context, this.settings?.learningLevel);
           engine = this.activePlatform;
         } else {
           log.error('NO FALLBACK:', shortText, '— no LLM configured');
@@ -222,7 +292,7 @@ export class Translator {
       }
     } else if (llmClient.isConfigured()) {
       const context = this.contextManager.getContext();
-      korean = await llmClient.translate(workText, context);
+      korean = await llmClient.translate(workText, context, this.settings?.learningLevel);
       engine = this.activePlatform;
     } else {
       log.error('No translation API configured');
@@ -245,7 +315,7 @@ export class Translator {
     };
 
     // 8. Cache result (keyed by normalized text)
-    await this.cache.set(workText, result);
+    await this.cache.set(workText, result, cacheSource);
     log.debug('Cached:', shortText);
 
     // 9. Update context window

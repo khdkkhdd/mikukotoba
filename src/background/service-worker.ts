@@ -303,6 +303,8 @@ async function handleMessage(
 
     case 'VOCAB_SAVE': {
       await VocabStorage.addEntry(message.payload);
+      // Auto-add to glossary: vocab → glossary sync
+      await addVocabToGlossary(message.payload.word, message.payload.meaning);
       sendResponse({ success: true });
       break;
     }
@@ -340,6 +342,12 @@ async function handleMessage(
     case 'VOCAB_EXPORT': {
       const all = await VocabStorage.exportAll();
       sendResponse({ payload: all });
+      break;
+    }
+
+    case 'VOCAB_IMPORT': {
+      const added = await VocabStorage.importEntries(message.payload.entries);
+      sendResponse({ payload: { added } });
       break;
     }
   }
@@ -405,7 +413,30 @@ chrome.runtime.onInstalled.addListener(async () => {
     title: 'JP 단어장에 추가',
     contexts: ['selection'],
   });
+
+  // Rebuild search index for existing vocab data (migration)
+  VocabStorage.rebuildSearchIndex().catch(() => {});
 });
+
+/**
+ * Add a vocab entry to the custom glossary (auto-sync).
+ * Skips if the word already exists in the glossary.
+ */
+const GLOSSARY_STORAGE_KEY = 'jp_glossary_custom';
+
+async function addVocabToGlossary(japanese: string, korean: string): Promise<void> {
+  if (!japanese || !korean) return;
+  try {
+    const data = await chrome.storage.local.get(GLOSSARY_STORAGE_KEY);
+    const entries: Array<{ japanese: string; korean: string; note?: string }> = data[GLOSSARY_STORAGE_KEY] || [];
+    // Skip if already exists
+    if (entries.some(e => e.japanese === japanese)) return;
+    entries.push({ japanese, korean, note: '단어장에서 자동 추가' });
+    await chrome.storage.local.set({ [GLOSSARY_STORAGE_KEY]: entries });
+  } catch {
+    // Best effort — don't fail vocab save
+  }
+}
 
 // Context menu click handler
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {

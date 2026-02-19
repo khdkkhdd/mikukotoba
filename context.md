@@ -1,73 +1,68 @@
 # Goal
 
-JP Helper Chrome Extension을 리팩토링한다. 문서화 단계에서 드러난 구조적 중복과 사이트 간 비일관성을 해소하여, 공유 인프라 위에서 사이트별 핸들러가 일관된 패턴으로 동작하게 만든다.
-
-성공 기준: Phase 1~2 완료 시 — DOM 감지 3중 구현 통합, ProcessedTracker 전면 적용, 렌더링 경로 일관화
+JP Helper Chrome Extension 리팩토링 — Phase 1~5 전체 완료.
+코드 품질, 공유 인프라, 단어장 연동, 번역 파이프라인 고도화까지 달성.
 
 # Research
 
-## 모듈 구조
+## 아키텍처
 
-- **Core**: `src/core/` — translator, analyzer, cache, glossary, vocab-storage, logger
-- **Shared**: `src/content/shared/` — batched-observer, processed-tracker, dom-utils, status-indicator, renderers/
-- **Handler**: `src/content/{twitter,youtube,webpage}/` — 사이트별 핸들러
-- **의존성 규칙**: Handler → Shared → Core (역방향 없음)
+```
+Handler → Shared → Core (역방향 없음)
+```
 
-## 문서 체계
+- **Core** `src/core/` — translator, analyzer, cache, glossary, vocab-storage, logger
+- **Shared** `src/content/shared/` — batched-observer, processed-tracker, dom-utils, status-indicator, renderers/
+- **Handler** `src/content/{twitter,youtube,webpage}/` — 사이트별 핸들러
+- **Vocab** `src/content/vocab/` — vocab-modal, vocab-add-handler, vocab-click-handler, word-click-callback, selection-capture
 
-| 종류 | 위치 | 수량 |
-|---|---|---|
-| 기능 명세 | `docs/` | 5개 |
-| 기술 명세 | `docs/tech/` | 5개 |
-| 리팩토링 가이드 | `docs/refactoring-guide.md` | Phase 1~5 상세 |
-| 의사결정 | `decisions/` | 0001~0009 |
+## 주요 패턴
+
+- **렌더링**: `createInlineBlock(result, settings, opts)`, `createRubyClone(el, tokens, opts)` — 모든 핸들러가 동일 렌더러 사용
+- **상태 관리**: `ProcessedTracker` — markProcessed/isProcessed/cleanup
+- **설정 변경**: `needsRenderRestart(prev, next)` → true면 stop→start
+- **단어 클릭**: `onWordClick` 콜백이 렌더러 → `word-click-callback.ts` → lazy `vocab-click-handler.ts` → `showVocabModal`
+- **캐시**: `TranslationCache.get/set/delete(text, source?)` — hostname 기반 컨텍스트 분리
+- **프롬프트**: `LEVEL_TEMPLATES[learningLevel]` — beginner/elementary/intermediate/advanced
+- **요청 관리**: `inflight` Map으로 in-flight dedup, max 3 동시 + FIFO 큐
+- **복잡도 학습**: `retranslateScores` 배열 → 60% 이상 임계값 미만이면 자동 하향
+
+## 스토리지 키
+
+| 키 | 용도 |
+|---|---|
+| `jp_vocab_index` | 날짜 목록 + 총 개수 |
+| `jp_vocab_YYYY-MM-DD` | 날짜별 VocabEntry[] |
+| `jp_vocab_search_flat` | 검색 전용 경량 배열 |
+| `jp_glossary_custom` | 사용자 용어집 (단어장 자동 추가 포함) |
+| `jp_cache_*` | 번역 캐시 (hostname 포함 해시) |
+| `jp_cache_index` | 캐시 키 목록 + 타임스탬프 |
 
 # Plan
 
 ## Decisions
 
-- 4.2(TextDetector 배치 공유)는 중복 ~30줄로 비용 대비 이득 낮아 스킵 (실행 계획에서 결정)
-- Phase 1~2를 단일 커밋으로 통합 (7개 논리적 변경을 하나의 커밋 `192d71f`로)
-- FuriganaInjector를 textNode 단위 파괴적 교체에서 element 단위 createRubyClone 비파괴적 방식으로 전환
-- InlineTranslator의 cleanup()은 ProcessedTracker.cleanup()에 위임
+Phase 1~3: `decisions/0011-*.md`, `decisions/0012-*.md`
+Phase 4~5: `decisions/0013-refactoring-phase4-5-completed.md`
+
+핵심 결정:
+- 단어 클릭은 렌더러에 `onWordClick` 콜백 옵션으로 구현 (렌더러 API 확장)
+- 용어집 연동은 service-worker에서 storage 직접 접근 (GlossaryManager 인스턴스 불필요)
+- 검색 인덱스는 플랫 배열 방식 (역인덱스 대비 구현 단순, 1000개 이내 충분)
+- 캐시 키에 hostname 포함 (선택적, source 없으면 기존 호환)
+- 프롬프트 템플릿 4단계 (UserSettings.learningLevel 기반)
+- 복잡도 학습은 세션 내 (영구 저장 미적용 — 설정 변경은 사용자 의사 존중)
 
 ## Steps
 
-### Phase 3 (판별·성능)
-
-상세 가이드: `docs/refactoring-guide-phase3-5.md`
-
-- [x] 3.1: Webpage IntersectionObserver 뷰포트 우선 처리 — `text-detector.ts` scan()에서 뷰포트 외 요소를 IntersectionObserver로 defer
-- [x] 3.2: Webpage SPA 네비게이션 대응 — popstate + hashchange + URL 폴링, 네비게이션 시 cleanup + 점진적 재스캔
-- [x] 3.3: YouTube VideoObserver 이벤트 통합 — `yt-navigate-finish` 이벤트 추가, 폴링 1000ms→5000ms
-- 3.4: Twitter 뷰포트 우선 처리 — 스킵 (가상 스크롤로 필요성 낮음)
-
-### Phase 4~5 (미착수)
-
-- **Phase 4 (단어장 연동)**: 단어 클릭→단어장, 용어집↔단어장 연동, JSON 가져오기
-- **Phase 5 (번역 파이프라인)**: 컨텍스트-인식 캐시 키, 프롬프트 템플릿화, 요청 큐잉/병합
+리팩토링 전체 완료. 남은 작업 없음.
 
 # Progress
 
-- [x] 기능 명세 5개
-- [x] 기술 명세 5개 + 정확성 점검 34건 수정
-- [x] 통합 아키텍처 문서 (`docs/tech/integration_architecture.md`)
-- [x] **Phase 1: 공유 인프라 정비** (커밋 `192d71f`)
-  - [x] TwitterObserver → BatchedObserver 전환, `twitter/observer.ts` 삭제
-  - [x] Webpage에 ProcessedTracker 적용 (InlineTranslator, TextDetector)
-  - [x] 재시작 조건 `needsRenderRestart()` 공유 함수 추출 (handlers/types.ts)
-  - [x] `isJapaneseShortText`를 `shared/dom-utils.ts`로 이동
-- [x] **Phase 2: 렌더링 통합** (커밋 `192d71f`)
-  - [x] Webpage 후리가나 → createRubyClone 비파괴적 전환
-  - [x] Webpage inline → createInlineBlock 전환 (spoiler 포함)
-  - [x] HoverPopup 래퍼 제거, `webpage/hover-popup.ts` 삭제
-- [x] **Phase 3: 판별·성능 최적화**
-  - [x] 3.1: TextDetector IntersectionObserver 뷰포트 defer (`text-detector.ts`)
-  - [x] 3.2: Webpage SPA 네비게이션 대응 (`webpage/index.ts`)
-  - [x] 3.3: VideoObserver `yt-navigate-finish` 이벤트 통합 (`video-observer.ts`)
-- [ ] Phase 4~5: 미착수
+- [x] Phase 1: 공유 인프라 정비 (`192d71f`)
+- [x] Phase 2: 렌더링 통합 (`192d71f`)
+- [x] Phase 3: 판별·성능 최적화 (`47297c8`)
+- [x] Phase 4: 단어장 연동·기능 확장 (미커밋)
+- [x] Phase 5: 번역 파이프라인 고도화 (미커밋)
 
-## 삭제된 파일
-
-- `src/content/twitter/observer.ts` — BatchedObserver 전환으로 제거
-- `src/content/webpage/hover-popup.ts` — HoverTooltip 직접 사용으로 제거
+Phase 4~5 변경사항은 아직 커밋되지 않음.

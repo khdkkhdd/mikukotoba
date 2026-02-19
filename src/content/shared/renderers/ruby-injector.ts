@@ -1,5 +1,7 @@
 import type { MorphemeToken } from '@/types';
 
+export type WordClickCallback = (surface: string, reading: string, sentence: string) => void;
+
 /**
  * Clone an element and inject ruby (furigana) annotations into its text nodes.
  *
@@ -13,7 +15,7 @@ import type { MorphemeToken } from '@/types';
 export function createRubyClone(
   element: HTMLElement,
   tokens: MorphemeToken[],
-  opts?: { translationAttr?: string; className?: string },
+  opts?: { translationAttr?: string; className?: string; onWordClick?: WordClickCallback },
 ): HTMLElement {
   const clone = element.cloneNode(true) as HTMLElement;
 
@@ -209,6 +211,19 @@ export function createRubyClone(
           const rt = document.createElement('rt');
           rt.textContent = part.reading;
           ruby.appendChild(rt);
+          if (opts?.onWordClick) {
+            ruby.style.cursor = 'pointer';
+            ruby.classList.add('jp-vocab-clickable');
+            const s = part.surface;
+            const r = part.reading;
+            ruby.addEventListener('click', (e) => {
+              // Don't trigger on link/mention clicks
+              if ((e.target as Element)?.closest?.('a')) return;
+              e.stopPropagation();
+              const sentence = clone.textContent?.trim() || '';
+              opts.onWordClick!(s, r, sentence);
+            });
+          }
           frag.appendChild(ruby);
         }
       }

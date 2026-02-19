@@ -3,6 +3,7 @@ import { tokensToFuriganaHTML } from '@/core/analyzer/reading-converter';
 import { escapeHtml, escapeHtmlWithBreaks } from '@/content/shared/dom-utils';
 import { addSpoilerBehavior } from './spoiler';
 import { formatEngineBadge, formatEngineBadgeWithRetry } from './engine-badge';
+import type { WordClickCallback } from './ruby-injector';
 
 export interface InlineBlockOptions {
   /** Container CSS class (e.g. 'jp-twitter-translation') */
@@ -19,6 +20,8 @@ export interface InlineBlockOptions {
   skipFurigana?: boolean;
   /** Callback for retry translation via LLM */
   onRetranslate?: () => Promise<TranslationResult>;
+  /** Callback for word click → vocab modal */
+  onWordClick?: WordClickCallback;
 }
 
 /**
@@ -88,6 +91,26 @@ function attachInlineBehaviors(
   const spoiler = div.querySelector<HTMLElement>('.jp-spoiler');
   if (spoiler) {
     addSpoilerBehavior(spoiler);
+  }
+
+  // Word click → vocab modal on ruby elements
+  if (opts?.onWordClick) {
+    const furiganaDiv = div.querySelector<HTMLElement>(`.${prefix}-furigana`);
+    if (furiganaDiv) {
+      const rubies = furiganaDiv.querySelectorAll('ruby');
+      for (const ruby of rubies) {
+        ruby.style.cursor = 'pointer';
+        ruby.classList.add('jp-vocab-clickable');
+        ruby.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const surface = ruby.firstChild?.textContent || '';
+          const rt = ruby.querySelector('rt');
+          const reading = rt?.textContent || '';
+          const sentence = furiganaDiv.textContent?.trim() || '';
+          opts.onWordClick!(surface, reading, sentence);
+        });
+      }
+    }
   }
 
   // Retry button handler

@@ -84,3 +84,9 @@
   cursor: default;
   user-select: auto;
 }
+
+/* Vocab clickable ruby hover feedback */
+.jp-vocab-clickable:hover {
+  background: rgba(74, 125, 255, 0.15);
+  border-radius: 2px;
+}

@@ -1,4 +1,4 @@
-import type { TranslationContext } from '@/types';
+import type { TranslationContext, LearningLevel } from '@/types';
 import type { LLMClient } from './llm-client';
 import { buildPrompt, buildSystemPrompt } from './prompt-builder';
 import { createLogger } from '@/core/logger';
@@ -63,12 +63,12 @@ export class GeminiClient implements LLMClient {
     return `${GEMINI_API_BASE}/${this.model}:generateContent`;
   }
 
-  async translate(text: string, context: TranslationContext): Promise<string> {
+  async translate(text: string, context: TranslationContext, level?: LearningLevel): Promise<string> {
     if (!this.isConfigured()) {
       throw new Error('Gemini API key not configured');
     }
 
-    const systemPrompt = buildSystemPrompt(context);
+    const systemPrompt = buildSystemPrompt(context, level);
     const userMessage = buildPrompt(text, context);
 
     let lastError: Error | null = null;

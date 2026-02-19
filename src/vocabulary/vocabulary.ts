@@ -354,6 +354,46 @@ async function handleExport(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+// ──────────────── Import ────────────────
+
+async function handleImport(): Promise<void> {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const entries: VocabEntry[] = JSON.parse(text);
+      if (!Array.isArray(entries)) {
+        alert('올바른 JSON 형식이 아닙니다.');
+        return;
+      }
+      // Validate at least first entry has required fields
+      if (entries.length > 0 && (!entries[0].id || !entries[0].word)) {
+        alert('단어장 형식이 올바르지 않습니다.');
+        return;
+      }
+      const resp = await sendMessage<{ payload: { added: number } }>({
+        type: 'VOCAB_IMPORT',
+        payload: { entries },
+      });
+      alert(`${resp.payload.added}개의 단어를 가져왔습니다.`);
+      if (resp.payload.added > 0) {
+        // Reload page to show new entries
+        allDates = [];
+        loadedDateCount = 0;
+        loadInitial();
+      }
+    } catch {
+      alert('파일을 읽는 중 오류가 발생했습니다.');
+    }
+  });
+  input.click();
+}
+
 // ──────────────── Quiz mode ────────────────
 
 function reRenderAllCards(): void {
@@ -409,6 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadMoreDates(LOAD_MORE_DAYS);
   });
 
-  // Export
+  // Import / Export
+  document.getElementById('importBtn')!.addEventListener('click', handleImport);
   document.getElementById('exportBtn')!.addEventListener('click', handleExport);
 });

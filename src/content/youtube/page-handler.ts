@@ -11,6 +11,7 @@ import { BatchedObserver } from '@/content/shared/batched-observer';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
 import { createStyledFuriganaBlock } from '@/content/shared/renderers/furigana-block';
 import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
+import { onWordClick } from '@/content/vocab/word-click-callback';
 import { HoverTooltip } from '@/content/shared/renderers/hover-tooltip';
 import { MorphologicalAnalyzer } from '@/core/analyzer/morphological';
 import {
@@ -304,6 +305,7 @@ export class YouTubePageHandler implements SiteHandler {
             spoiler: true,
             skipFurigana: true,
             onRetranslate: () => translator.retranslate(text),
+            onWordClick,
           });
           furigana.insertAdjacentElement('afterend', translationBlock);
           this.tracker.trackInjected(translationBlock);
@@ -343,6 +345,7 @@ export class YouTubePageHandler implements SiteHandler {
             classPrefix: 'jp-yt',
             spoiler: true,
             onRetranslate: text ? () => translator.retranslate(text) : undefined,
+            onWordClick,
           });
         }
         // label: compact single-line block below with korean translation
@@ -457,6 +460,7 @@ export class YouTubePageHandler implements SiteHandler {
 
           const clone = createRubyClone(el, tokens, {
             translationAttr: YT_TRANSLATION_ATTR,
+            onWordClick,
           });
           anchor.insertAdjacentElement('afterend', clone);
           this.tracker.trackInjected(clone);
@@ -704,6 +708,7 @@ export class YouTubePageHandler implements SiteHandler {
         el.classList.remove('jp-furigana-hidden');
         const clone = createRubyClone(el, allTokens, {
           translationAttr: YT_TRANSLATION_ATTR,
+          onWordClick,
         });
         anchor.insertAdjacentElement('afterend', clone);
         this.tracker.trackInjected(clone);
@@ -729,6 +734,7 @@ export class YouTubePageHandler implements SiteHandler {
           spoiler: true,
           skipFurigana: showFurigana,
           onRetranslate: () => translator.retranslate(paraText),
+          onWordClick,
         });
         container.appendChild(block);
       }

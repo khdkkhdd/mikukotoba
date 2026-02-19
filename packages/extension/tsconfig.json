@@ -13,10 +13,11 @@
     "noEmit": true,
     "jsx": "preserve",
     "outDir": "dist",
-    "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@jp-helper/shared": ["../shared/src/index.ts"],
+      "@jp-helper/shared/*": ["../shared/src/*"]
     }
   },
   "include": ["src/**/*.ts"],

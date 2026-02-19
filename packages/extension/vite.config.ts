@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+      '@jp-helper/shared': resolve(__dirname, '../shared/src/index.ts'),
       'path': 'path-browserify',
     },
   },

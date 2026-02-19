@@ -1,15 +1,19 @@
 import type { SyncMetadata, SyncResult, VocabEntry, VocabStorageIndex } from '@/types';
+import type { DrivePartitionContent, DriveSyncMeta } from '@jp-helper/shared';
 import { DriveAuth } from './drive-auth';
-import { DriveAPI } from './drive-api';
+import { DriveAPI } from '@jp-helper/shared';
+import {
+  mergeEntries,
+  cleanTombstones,
+  drivePartitionName,
+  DRIVE_META_FILE,
+  DRIVE_INDEX_FILE,
+} from '@jp-helper/shared';
 
 const SYNC_META_KEY = 'jp_drive_sync_meta';
 const VOCAB_INDEX_KEY = 'jp_vocab_index';
 const VOCAB_PREFIX = 'jp_vocab_';
 const SEARCH_INDEX_KEY = 'jp_vocab_search_flat';
-
-const DRIVE_META_FILE = 'sync_metadata.json';
-const DRIVE_INDEX_FILE = 'vocab_index.json';
-const TOMBSTONE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Debounce map: date → timer
 const pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -17,21 +21,6 @@ const DEBOUNCE_MS = 500;
 
 function vocabDateKey(date: string): string {
   return `${VOCAB_PREFIX}${date}`;
-}
-
-function drivePartitionName(date: string): string {
-  return `vocab_${date}.json`;
-}
-
-interface DrivePartitionContent {
-  date: string;
-  entries: VocabEntry[];
-  version: number;
-}
-
-interface DriveSyncMeta {
-  partitionVersions: Record<string, number>;
-  deletedEntries: Record<string, number>;
 }
 
 async function getLocalMeta(): Promise<SyncMetadata> {
@@ -95,17 +84,6 @@ async function rebuildSearchIndex(): Promise<void> {
   await chrome.storage.local.set({ [SEARCH_INDEX_KEY]: searchEntries });
 }
 
-function cleanTombstones(deleted: Record<string, number>): Record<string, number> {
-  const now = Date.now();
-  const cleaned: Record<string, number> = {};
-  for (const [id, ts] of Object.entries(deleted)) {
-    if (now - ts < TOMBSTONE_TTL) {
-      cleaned[id] = ts;
-    }
-  }
-  return cleaned;
-}
-
 async function ensureDriveFileId(
   token: string,
   meta: SyncMetadata,
@@ -122,9 +100,6 @@ async function ensureDriveFileId(
 export const DriveSync = {
   getMetadata: getLocalMeta,
 
-  /**
-   * Push a single date partition to Drive (debounced).
-   */
   pushPartition(date: string): Promise<void> {
     return new Promise((resolve) => {
       const existing = pushTimers.get(date);
@@ -142,9 +117,6 @@ export const DriveSync = {
     });
   },
 
-  /**
-   * Push after a deletion — records tombstone first.
-   */
   async pushPartitionWithDeletion(entryId: string, date: string): Promise<void> {
     const meta = await getLocalMeta();
     meta.deletedEntries[entryId] = Date.now();
@@ -152,9 +124,6 @@ export const DriveSync = {
     return this.pushPartition(date);
   },
 
-  /**
-   * Pull all remote changes and merge with local data.
-   */
   async pull(): Promise<SyncResult> {
     const token = await DriveAuth.getValidToken();
     if (!token) return { changed: false, pulled: 0, pushed: 0 };
@@ -164,7 +133,6 @@ export const DriveSync = {
     let pushed = 0;
     let changed = false;
 
-    // Get remote metadata
     let remoteMeta: DriveSyncMeta = { partitionVersions: {}, deletedEntries: {} };
     const remoteMetaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
 
@@ -176,7 +144,6 @@ export const DriveSync = {
       }
     }
 
-    // Apply remote deletions locally
     for (const [entryId, remoteTs] of Object.entries(remoteMeta.deletedEntries || {})) {
       const localTs = meta.deletedEntries[entryId];
       if (!localTs || remoteTs > localTs) {
@@ -184,7 +151,6 @@ export const DriveSync = {
       }
     }
 
-    // Get all date partitions (union of local + remote)
     const localIndex = await getLocalIndex();
     const allDates = new Set([
       ...localIndex.dates,
@@ -196,7 +162,6 @@ export const DriveSync = {
       const remoteVersion = remoteMeta.partitionVersions[date] || 0;
 
       if (remoteVersion > localVersion) {
-        // Pull remote partition
         const fileName = drivePartitionName(date);
         const fileId = await ensureDriveFileId(token, meta, fileName);
         if (fileId) {
@@ -219,18 +184,15 @@ export const DriveSync = {
           }
         }
       } else if (localVersion > remoteVersion) {
-        // Push local partition
         await pushPartitionImmediate(date);
         pushed++;
       }
     }
 
-    // Clean tombstones
     meta.deletedEntries = cleanTombstones(meta.deletedEntries);
     meta.lastSyncTimestamp = Date.now();
     await saveLocalMeta(meta);
 
-    // Rebuild local index from actual data
     if (changed) {
       await rebuildLocalIndex();
       await rebuildSearchIndex();
@@ -240,40 +202,6 @@ export const DriveSync = {
   },
 };
 
-/**
- * Merge local and remote entry lists.
- * Uses entry-level timestamp comparison, respects tombstones.
- */
-function mergeEntries(
-  local: VocabEntry[],
-  remote: VocabEntry[],
-  deletedEntries: Record<string, number>
-): VocabEntry[] {
-  const map = new Map<string, VocabEntry>();
-
-  // Add local entries
-  for (const entry of local) {
-    if (!deletedEntries[entry.id]) {
-      map.set(entry.id, entry);
-    }
-  }
-
-  // Merge remote entries (newer wins)
-  for (const entry of remote) {
-    if (deletedEntries[entry.id]) continue;
-
-    const existing = map.get(entry.id);
-    if (!existing || entry.timestamp > existing.timestamp) {
-      map.set(entry.id, entry);
-    }
-  }
-
-  return [...map.values()];
-}
-
-/**
- * Push a single partition immediately (no debounce).
- */
 async function pushPartitionImmediate(date: string): Promise<void> {
   const token = await DriveAuth.getValidToken();
   if (!token) return;
@@ -282,11 +210,7 @@ async function pushPartitionImmediate(date: string): Promise<void> {
   const entries = await getLocalEntries(date);
   const version = Date.now();
 
-  const content: DrivePartitionContent = {
-    date,
-    entries,
-    version,
-  };
+  const content: DrivePartitionContent = { date, entries, version };
 
   const fileName = drivePartitionName(date);
   const fileId = await ensureDriveFileId(token, meta, fileName);
@@ -301,7 +225,6 @@ async function pushPartitionImmediate(date: string): Promise<void> {
   meta.partitionVersions[date] = version;
   meta.lastSyncTimestamp = Date.now();
 
-  // Update remote metadata
   const remoteSyncMeta: DriveSyncMeta = {
     partitionVersions: { ...meta.partitionVersions },
     deletedEntries: cleanTombstones(meta.deletedEntries),
@@ -315,7 +238,6 @@ async function pushPartitionImmediate(date: string): Promise<void> {
     meta.driveFileIds[DRIVE_META_FILE] = newId;
   }
 
-  // Also update drive index file
   const localIndex = await getLocalIndex();
   const indexFileId = await ensureDriveFileId(token, meta, DRIVE_INDEX_FILE);
   if (indexFileId) {
@@ -328,9 +250,6 @@ async function pushPartitionImmediate(date: string): Promise<void> {
   await saveLocalMeta(meta);
 }
 
-/**
- * Rebuild the local vocab index from actual storage data.
- */
 async function rebuildLocalIndex(): Promise<void> {
   const allData = await chrome.storage.local.get(null);
   const dates: string[] = [];

@@ -1,25 +1,5 @@
 {
   "name": "jp-helper",
-  "version": "1.0.0",
-  "description": "Japanese learning assistant Chrome extension",
-  "type": "module",
-  "scripts": {
-    "dev": "vite build --watch --mode development",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
-  },
-  "devDependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
-    "@crxjs/vite-plugin": "^2.0.0-beta.28",
-    "@playwright/test": "^1.58.2",
-    "@types/chrome": "^0.0.287",
-    "typescript": "^5.7.0",
-    "vite": "^6.0.0"
-  },
-  "dependencies": {
-    "kuromoji": "^0.1.2",
-    "kuroshiro": "^1.2.0",
-    "kuroshiro-analyzer-kuromoji": "^1.1.0",
-    "path-browserify": "^1.0.1"
-  }
+  "private": true,
+  "workspaces": ["packages/*"]
 }

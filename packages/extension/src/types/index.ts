@@ -142,44 +142,20 @@ export interface UserCorrection {
   timestamp: number;
 }
 
-// 단어장 항목
-export interface VocabEntry {
-  id: string;              // `${Date.now()}_${random}`
-  word: string;            // 선택한 일본어 텍스트 (기본형)
-  reading: string;         // 히라가나 읽기
-  romaji: string;          // 로마자
-  meaning: string;         // 한국어 뜻
-  pos: string;             // 품사
-  exampleSentence: string; // 주변 문장
-  exampleSource: string;   // 출처 URL
-  note: string;            // 사용자 메모
-  dateAdded: string;       // YYYY-MM-DD
-  timestamp: number;       // unix ms
-}
+// 공유 타입 (shared 패키지에서 정의)
+import type {
+  VocabEntry as _VocabEntry,
+  VocabStorageIndex as _VocabStorageIndex,
+  SyncMetadata as _SyncMetadata,
+  DriveStatus as _DriveStatus,
+  SyncResult as _SyncResult,
+} from '@jp-helper/shared';
 
-export interface VocabStorageIndex {
-  dates: string[];         // 내림차순 정렬된 날짜 목록
-  totalCount: number;
-}
-
-// Google Drive 동기화
-export interface SyncMetadata {
-  lastSyncTimestamp: number;
-  partitionVersions: Record<string, number>;  // date → timestamp
-  driveFileIds: Record<string, string>;       // filename → Drive file ID
-  deletedEntries: Record<string, number>;     // entryId → deletion timestamp
-}
-
-export interface DriveStatus {
-  loggedIn: boolean;
-  email?: string;
-}
-
-export interface SyncResult {
-  changed: boolean;
-  pulled: number;
-  pushed: number;
-}
+export type VocabEntry = _VocabEntry;
+export type VocabStorageIndex = _VocabStorageIndex;
+export type SyncMetadata = _SyncMetadata;
+export type DriveStatus = _DriveStatus;
+export type SyncResult = _SyncResult;
 
 // 캐시 항목
 export interface CacheEntry {

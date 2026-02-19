@@ -29,6 +29,12 @@ body {
   letter-spacing: 0.5px;
 }
 
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .icon-btn {
   background: none;
   border: none;

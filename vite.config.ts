@@ -18,6 +18,7 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, 'src/popup/popup.html'),
         options: resolve(__dirname, 'src/options/options.html'),
+        vocabulary: resolve(__dirname, 'src/vocabulary/vocabulary.html'),
       },
     },
     outDir: 'dist',

@@ -1,0 +1,378 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Noto Sans JP', sans-serif;
+  background: #0f0f1a;
+  color: #e0e0e0;
+  min-height: 100vh;
+}
+
+.vocab-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+/* Header */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.page-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.total-count {
+  font-size: 13px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.search-input {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: #e0e0e0;
+  font-size: 13px;
+  width: 200px;
+  outline: none;
+  transition: border-color 150ms;
+}
+
+.search-input:focus {
+  border-color: #4a7dff;
+}
+
+.btn {
+  background: #2a2a40;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 6px 14px;
+  color: #ccc;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 150ms;
+}
+
+.btn:hover {
+  background: #3a3a55;
+}
+
+/* Content */
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+}
+
+.empty-state p {
+  margin-bottom: 8px;
+}
+
+.empty-state .hint {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.6;
+}
+
+/* Date group */
+.date-group {
+  margin-bottom: 8px;
+}
+
+.date-header {
+  font-size: 13px;
+  color: #666;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-header .date-count {
+  font-size: 11px;
+  color: #555;
+}
+
+/* Entry card */
+.entry-card {
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  transition: border-color 150ms;
+}
+
+.entry-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.entry-top {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.entry-word {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.entry-reading {
+  font-size: 14px;
+  color: #B0B0B0;
+}
+
+.entry-romaji {
+  font-size: 13px;
+  color: #7CB9E8;
+}
+
+.entry-pos {
+  font-size: 11px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.entry-meaning {
+  font-size: 15px;
+  color: #F0E68C;
+  margin: 6px 0;
+}
+
+.entry-example {
+  font-size: 13px;
+  color: #999;
+  font-style: italic;
+  padding-left: 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  margin: 6px 0;
+}
+
+.entry-note {
+  font-size: 12px;
+  color: #777;
+  margin-top: 4px;
+}
+
+.entry-source {
+  font-size: 11px;
+  color: #555;
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+.entry-source a {
+  color: #4a7dff;
+  text-decoration: none;
+}
+
+.entry-source a:hover {
+  text-decoration: underline;
+}
+
+.entry-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+.entry-actions button {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: color 150ms, background 150ms;
+}
+
+.entry-actions button:hover {
+  color: #ccc;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.entry-actions .delete-btn:hover {
+  color: #f44336;
+}
+
+/* Inline edit mode */
+.entry-card.editing .entry-edit-input {
+  display: block;
+}
+
+.entry-edit-input {
+  background: #2a2a40;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: #e0e0e0;
+  font-size: 13px;
+  width: 100%;
+  outline: none;
+  margin: 2px 0;
+  font-family: inherit;
+}
+
+.entry-edit-input:focus {
+  border-color: #4a7dff;
+}
+
+/* Search highlight */
+.search-match {
+  background: rgba(74, 125, 255, 0.25);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* Load more */
+.load-more-wrap {
+  text-align: center;
+  padding: 16px;
+}
+
+/* Confirm delete dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.confirm-dialog {
+  background: #1a1a2e;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 20px 24px;
+  text-align: center;
+}
+
+.confirm-dialog p {
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.confirm-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.confirm-buttons .btn-danger {
+  background: #f44336;
+  color: #fff;
+  border-color: #f44336;
+}
+
+.confirm-buttons .btn-danger:hover {
+  background: #d32f2f;
+}
+
+/* Quiz mode selector */
+.quiz-mode-selector {
+  display: flex;
+  gap: 0;
+  border: 1px solid #444;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.quiz-mode-btn {
+  background: #2a2a40;
+  border: none;
+  border-right: 1px solid #444;
+  padding: 5px 12px;
+  color: #888;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+  white-space: nowrap;
+}
+
+.quiz-mode-btn:last-child {
+  border-right: none;
+}
+
+.quiz-mode-btn:hover {
+  background: #3a3a55;
+  color: #ccc;
+}
+
+.quiz-mode-btn.active {
+  background: #4a7dff;
+  color: #fff;
+}
+
+/* Quiz card */
+.quiz-card {
+  cursor: pointer;
+  user-select: none;
+}
+
+.quiz-card:hover {
+  border-color: rgba(74, 125, 255, 0.4);
+}
+
+/* Quiz hidden content */
+.quiz-hidden {
+  display: inline-block;
+}
+
+.quiz-hidden .quiz-placeholder {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.08);
+  color: #555;
+  padding: 2px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.quiz-hidden .quiz-answer {
+  display: none;
+}
+
+/* Revealed state */
+.revealed .quiz-hidden .quiz-placeholder {
+  display: none;
+}
+
+.revealed .quiz-hidden .quiz-answer {
+  display: inline;
+}

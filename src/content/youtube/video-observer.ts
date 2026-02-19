@@ -20,6 +20,7 @@ export class VideoObserver {
   private currentVideoId: string | null = null;
   private onVideoChange: VideoChangeCallback;
   private urlCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private navigateHandler: (() => void) | null = null;
 
   constructor(onVideoChange: VideoChangeCallback) {
     this.onVideoChange = onVideoChange;
@@ -27,8 +28,14 @@ export class VideoObserver {
 
   start(): void {
     log.info('Observer started');
-    // Monitor URL changes (YouTube SPA doesn't trigger normal page loads)
-    this.urlCheckInterval = setInterval(() => this.checkUrlChange(), 1000);
+
+    // Primary: yt-navigate-finish event (fires on SPA navigation)
+    this.navigateHandler = () => this.checkUrlChange();
+    document.addEventListener('yt-navigate-finish', this.navigateHandler);
+
+    // Fallback: poll URL at reduced frequency for edge cases
+    // (autoplay, playlist next video where event may not fire)
+    this.urlCheckInterval = setInterval(() => this.checkUrlChange(), 5000);
 
     // Also observe DOM mutations for video element
     this.observer = new MutationObserver(() => {
@@ -45,6 +52,10 @@ export class VideoObserver {
   }
 
   stop(): void {
+    if (this.navigateHandler) {
+      document.removeEventListener('yt-navigate-finish', this.navigateHandler);
+      this.navigateHandler = null;
+    }
     if (this.observer) {
       this.observer.disconnect();
       this.observer = null;

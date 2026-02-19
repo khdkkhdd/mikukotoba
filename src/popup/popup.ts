@@ -120,6 +120,11 @@ function setupEventListeners(): void {
     chrome.runtime.openOptionsPage();
   });
 
+  // Open vocabulary page
+  document.getElementById('openVocab')!.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('src/vocabulary/vocabulary.html') });
+  });
+
   // Enable toggle
   document.getElementById('enableToggle')!.addEventListener('change', (e) => {
     const enabled = (e.target as HTMLInputElement).checked;

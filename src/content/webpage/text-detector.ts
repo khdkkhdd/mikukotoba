@@ -37,20 +37,14 @@ export class TextDetector {
   }
 
   start(): void {
-    // C: IntersectionObserver for viewport-based catch
+    // C: IntersectionObserver — processes deferred (off-screen) elements on viewport entry
     this.intersectionObserver = new IntersectionObserver(
       (entries) => {
-        const targets: HTMLElement[] = [];
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const el = entry.target as HTMLElement;
-          if (!this.tracker.isProcessed(el)) {
-            targets.push(el);
-          }
           this.intersectionObserver?.unobserve(el);
-        }
-        if (targets.length > 0) {
-          for (const el of targets) {
+          if (!this.tracker.isProcessed(el)) {
             this.scan(el);
           }
         }
@@ -176,14 +170,25 @@ export class TextDetector {
     for (const [element, textNodes] of blockElements) {
       const text = textNodes.map((n) => n.textContent?.trim()).filter(Boolean).join('');
       if (text && japaneseRatio(text) > 0.1) {
-        this.tracker.markProcessed(element, text);
-        blocks.push({ element, textNodes, text });
+        if (this.isNearViewport(element)) {
+          this.tracker.markProcessed(element, text);
+          blocks.push({ element, textNodes, text });
+        } else {
+          // Defer: don't mark as processed yet, observe for viewport entry
+          this.intersectionObserver?.observe(element);
+        }
       }
     }
 
     if (blocks.length > 0) {
       this.onDetected(blocks);
     }
+  }
+
+  /** Check if element is within or near the viewport (200px margin) */
+  private isNearViewport(el: HTMLElement): boolean {
+    const rect = el.getBoundingClientRect();
+    return rect.bottom > -200 && rect.top < window.innerHeight + 200;
   }
 
   /**

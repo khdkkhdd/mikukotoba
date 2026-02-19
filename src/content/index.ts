@@ -270,8 +270,47 @@ chrome.runtime.onMessage.addListener((message: MessageType) => {
       break;
     }
 
+    case 'VOCAB_ADD_START': {
+      handleVocabAdd(message.payload.text);
+      break;
+    }
+
   }
 });
+
+// ──────────────── Vocab Add ────────────────
+
+import { autoFillVocab } from './vocab/vocab-add-handler';
+import { showVocabModal, updateVocabModal, removeVocabModal } from './vocab/vocab-modal';
+
+async function handleVocabAdd(text: string): Promise<void> {
+  try {
+    // Use captured selection info if available, fallback to message text
+    const selInfo = getLastSelectionInfo();
+    const selectedText = selInfo?.text || text;
+
+    // Show loading modal immediately
+    showVocabModal(null, () => {});
+
+    // Ensure translator is ready
+    await initTranslator();
+    if (!translatorReady) {
+      removeVocabModal();
+      return;
+    }
+
+    // Auto-fill with analysis + translation
+    const autoFill = await autoFillVocab(selectedText, translator);
+
+    // Update modal with results
+    updateVocabModal(autoFill, async (entry) => {
+      await chrome.runtime.sendMessage({ type: 'VOCAB_SAVE', payload: entry });
+    });
+  } catch (e) {
+    log.error('Vocab add failed:', e);
+    removeVocabModal();
+  }
+}
 
 // ──────────────── Background Fetch Proxy ────────────────
 
@@ -309,6 +348,11 @@ async function bgFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Re
 }
 
 setApiFetchImpl(bgFetch);
+
+// ──────────────── Selection Capture for Vocab ────────────────
+
+import { captureSelectionOnContextMenu, getLastSelectionInfo } from './vocab/selection-capture';
+captureSelectionOnContextMenu();
 
 // ──────────────── Start ────────────────
 

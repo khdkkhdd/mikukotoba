@@ -34,6 +34,12 @@ export class WebpageSiteHandler implements SiteHandler {
   private inlineTranslator: InlineTranslator | null = null;
   private furiganaInjector: FuriganaInjector | null = null;
 
+  // SPA navigation detection
+  private lastUrl = '';
+  private urlPollInterval: ReturnType<typeof setInterval> | null = null;
+  private rescanTimers: ReturnType<typeof setTimeout>[] = [];
+  private boundHandleNavigation: (() => void) | null = null;
+
   constructor(settings: UserSettings) {
     this.settings = settings;
     this.tracker = new ProcessedTracker('data-jp-processed', 'data-jp-translation');
@@ -72,10 +78,14 @@ export class WebpageSiteHandler implements SiteHandler {
         await this.startFuriganaMode();
         break;
     }
+
+    this.startSpaDetection();
   }
 
   stop(): void {
     log.info('Webpage handler stopping');
+    this.stopSpaDetection();
+
     this.textDetector?.stop();
     this.hoverTooltip?.unmount();
     this.inlineTranslator?.cleanup();
@@ -176,5 +186,65 @@ export class WebpageSiteHandler implements SiteHandler {
     }
 
     return null;
+  }
+
+  // ──────────────── SPA Navigation ────────────────
+
+  private startSpaDetection(): void {
+    this.lastUrl = location.href;
+    this.boundHandleNavigation = () => this.handleNavigation();
+
+    window.addEventListener('popstate', this.boundHandleNavigation);
+    window.addEventListener('hashchange', this.boundHandleNavigation);
+
+    // Fallback: poll URL for pushState/replaceState (can't wrap in ISOLATED world)
+    this.urlPollInterval = setInterval(() => {
+      if (location.href !== this.lastUrl) {
+        this.handleNavigation();
+      }
+    }, 1000);
+  }
+
+  private stopSpaDetection(): void {
+    if (this.boundHandleNavigation) {
+      window.removeEventListener('popstate', this.boundHandleNavigation);
+      window.removeEventListener('hashchange', this.boundHandleNavigation);
+      this.boundHandleNavigation = null;
+    }
+    if (this.urlPollInterval) {
+      clearInterval(this.urlPollInterval);
+      this.urlPollInterval = null;
+    }
+    for (const t of this.rescanTimers) clearTimeout(t);
+    this.rescanTimers = [];
+  }
+
+  private handleNavigation(): void {
+    const newUrl = location.href;
+    if (newUrl === this.lastUrl) return;
+    this.lastUrl = newUrl;
+
+    log.info('SPA navigation detected:', newUrl);
+
+    // Clear pending rescans
+    for (const t of this.rescanTimers) clearTimeout(t);
+    this.rescanTimers = [];
+
+    // Clean up old injections (resets internal state, same tracker object reused)
+    this.tracker.cleanup();
+
+    // Restart TextDetector to scan new content
+    this.textDetector?.stop();
+    this.textDetector?.start();
+
+    // Progressive rescan for async-rendered SPA content
+    for (const delay of [500, 1500, 3000]) {
+      this.rescanTimers.push(
+        setTimeout(() => {
+          log.debug(`SPA delayed rescan after ${delay}ms`);
+          this.textDetector?.scan(document.body);
+        }, delay),
+      );
+    }
   }
 }

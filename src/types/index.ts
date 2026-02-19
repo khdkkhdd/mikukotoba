@@ -142,6 +142,26 @@ export interface UserCorrection {
   timestamp: number;
 }
 
+// 단어장 항목
+export interface VocabEntry {
+  id: string;              // `${Date.now()}_${random}`
+  word: string;            // 선택한 일본어 텍스트 (기본형)
+  reading: string;         // 히라가나 읽기
+  romaji: string;          // 로마자
+  meaning: string;         // 한국어 뜻
+  pos: string;             // 품사
+  exampleSentence: string; // 주변 문장
+  exampleSource: string;   // 출처 URL
+  note: string;            // 사용자 메모
+  dateAdded: string;       // YYYY-MM-DD
+  timestamp: number;       // unix ms
+}
+
+export interface VocabStorageIndex {
+  dates: string[];         // 내림차순 정렬된 날짜 목록
+  totalCount: number;
+}
+
 // 캐시 항목
 export interface CacheEntry {
   result: TranslationResult;
@@ -185,7 +205,15 @@ export type MessageType =
   | { type: 'TEST_OPENAI'; payload: { apiKey: string } }
   | { type: 'TEST_GEMINI'; payload: { apiKey: string } }
   | { type: 'TEST_RESULT'; payload: { success: boolean; message: string } }
-  | { type: 'FETCH_PROXY'; payload: { url: string; method: string; headers: Record<string, string>; body?: string } };
+  | { type: 'FETCH_PROXY'; payload: { url: string; method: string; headers: Record<string, string>; body?: string } }
+  | { type: 'VOCAB_ADD_START'; payload: { text: string } }
+  | { type: 'VOCAB_SAVE'; payload: VocabEntry }
+  | { type: 'VOCAB_GET_INDEX' }
+  | { type: 'VOCAB_GET_ENTRIES'; payload: { dates: string[] } }
+  | { type: 'VOCAB_UPDATE'; payload: VocabEntry }
+  | { type: 'VOCAB_DELETE'; payload: { id: string; date: string } }
+  | { type: 'VOCAB_SEARCH'; payload: { query: string } }
+  | { type: 'VOCAB_EXPORT' };
 
 // 기본 설정값
 export const DEFAULT_SETTINGS: UserSettings = {

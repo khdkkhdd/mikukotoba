@@ -4,6 +4,7 @@ import { papagoClient } from '@/core/translator/papago';
 import { claudeClient } from '@/core/translator/claude';
 import { openaiClient } from '@/core/translator/openai';
 import { geminiClient } from '@/core/translator/gemini';
+import { VocabStorage } from '@/core/vocab-storage';
 
 const SETTINGS_KEY = 'jp_settings';
 const API_KEYS_KEY = 'jp_api_keys';
@@ -299,6 +300,48 @@ async function handleMessage(
       }
       break;
     }
+
+    case 'VOCAB_SAVE': {
+      await VocabStorage.addEntry(message.payload);
+      sendResponse({ success: true });
+      break;
+    }
+
+    case 'VOCAB_GET_INDEX': {
+      const index = await VocabStorage.getIndex();
+      sendResponse({ payload: index });
+      break;
+    }
+
+    case 'VOCAB_GET_ENTRIES': {
+      const entries = await VocabStorage.getEntriesByDates(message.payload.dates);
+      sendResponse({ payload: entries });
+      break;
+    }
+
+    case 'VOCAB_UPDATE': {
+      await VocabStorage.updateEntry(message.payload);
+      sendResponse({ success: true });
+      break;
+    }
+
+    case 'VOCAB_DELETE': {
+      await VocabStorage.deleteEntry(message.payload.id, message.payload.date);
+      sendResponse({ success: true });
+      break;
+    }
+
+    case 'VOCAB_SEARCH': {
+      const results = await VocabStorage.search(message.payload.query);
+      sendResponse({ payload: results });
+      break;
+    }
+
+    case 'VOCAB_EXPORT': {
+      const all = await VocabStorage.exportAll();
+      sendResponse({ payload: all });
+      break;
+    }
   }
 }
 
@@ -354,4 +397,22 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Initialize on install
 chrome.runtime.onInstalled.addListener(async () => {
   await loadSettings();
+
+  // Re-register context menus (removeAll first to avoid duplicate ID errors on update)
+  await chrome.contextMenus.removeAll();
+  chrome.contextMenus.create({
+    id: 'jp-add-to-vocab',
+    title: 'JP 단어장에 추가',
+    contexts: ['selection'],
+  });
+});
+
+// Context menu click handler
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== 'jp-add-to-vocab' || !info.selectionText || !tab?.id) return;
+
+  chrome.tabs.sendMessage(tab.id, {
+    type: 'VOCAB_ADD_START',
+    payload: { text: info.selectionText },
+  }).catch(() => {});
 });

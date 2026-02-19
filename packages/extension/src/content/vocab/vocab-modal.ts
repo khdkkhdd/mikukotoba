@@ -264,7 +264,7 @@ function getModalStyles(): string {
 
     .vm-btn-save {
       background: #39C5BB;
-      color: #0D4F52;
+      color: #FFFFFF;
     }
 
     .vm-btn-save:hover {

@@ -136,11 +136,16 @@ export function Calendar(props: CalendarProps) {
   const startDay = startDayOfWeek(viewYear, viewMonth);
   const showToday = props.showToday !== false;
 
-  // 날짜 셀 생성
-  const cells = useMemo(() => {
-    const result: (number | null)[] = [];
-    for (let i = 0; i < startDay; i++) result.push(null);
-    for (let d = 1; d <= totalDays; d++) result.push(d);
+  // 날짜 셀 생성 (7개씩 행 단위로 분할)
+  const rows = useMemo(() => {
+    const flat: (number | null)[] = [];
+    for (let i = 0; i < startDay; i++) flat.push(null);
+    for (let d = 1; d <= totalDays; d++) flat.push(d);
+    while (flat.length % 7 !== 0) flat.push(null);
+    const result: (number | null)[][] = [];
+    for (let i = 0; i < flat.length; i += 7) {
+      result.push(flat.slice(i, i + 7));
+    }
     return result;
   }, [startDay, totalDays]);
 
@@ -177,90 +182,94 @@ export function Calendar(props: CalendarProps) {
       </View>
 
       {/* 날짜 그리드 */}
-      <View style={styles.grid}>
-        {cells.map((day, idx) => {
-          if (day === null) {
-            return <View key={`empty-${idx}`} style={styles.dayCell} />;
-          }
+      <View>
+        {rows.map((row, rowIdx) => (
+          <View key={rowIdx} style={styles.weekRow}>
+            {row.map((day, colIdx) => {
+              if (day === null) {
+                return <View key={`empty-${rowIdx}-${colIdx}`} style={styles.dayCell} />;
+              }
 
-          const dateStr = fmt(viewYear, viewMonth, day);
-          const isToday = showToday && dateStr === today;
-          const marking = props.markings?.[dateStr];
-          const heatValue = props.heatmap?.[dateStr];
+              const dateStr = fmt(viewYear, viewMonth, day);
+              const isToday = showToday && dateStr === today;
+              const marking = props.markings?.[dateStr];
+              const heatValue = props.heatmap?.[dateStr];
 
-          // 선택 상태
-          let isSelected = false;
-          let isRangeMiddle = false;
-          let isRangeStart = false;
-          let isRangeEnd = false;
+              // 선택 상태
+              let isSelected = false;
+              let isRangeMiddle = false;
+              let isRangeStart = false;
+              let isRangeEnd = false;
 
-          if (props.mode === 'single') {
-            isSelected = dateStr === props.selectedDate;
-          } else {
-            const rs = props.startDate ?? rangeStart;
-            const re = props.endDate;
-            if (rs && re) {
-              isRangeStart = dateStr === rs;
-              isRangeEnd = dateStr === re;
-              isRangeMiddle = dateStr > rs && dateStr < re;
-              isSelected = isRangeStart || isRangeEnd;
-            } else if (rs) {
-              isSelected = dateStr === rs;
-              isRangeStart = isSelected;
-            }
-          }
+              if (props.mode === 'single') {
+                isSelected = dateStr === props.selectedDate;
+              } else {
+                const rs = props.startDate ?? rangeStart;
+                const re = props.endDate;
+                if (rs && re) {
+                  isRangeStart = dateStr === rs;
+                  isRangeEnd = dateStr === re;
+                  isRangeMiddle = dateStr > rs && dateStr < re;
+                  isSelected = isRangeStart || isRangeEnd;
+                } else if (rs) {
+                  isSelected = dateStr === rs;
+                  isRangeStart = isSelected;
+                }
+              }
 
-          // 히트맵 배경색
-          let heatBg: string | undefined;
-          if (heatValue !== undefined && heatValue > 0) {
-            const intensity = Math.min(heatValue / heatmapMax, 1);
-            const alpha = 0.15 + intensity * 0.55; // 0.15 ~ 0.7
-            heatBg = `rgba(201, 107, 79, ${alpha})`;
-          }
+              // 히트맵 배경색
+              let heatBg: string | undefined;
+              if (heatValue !== undefined && heatValue > 0) {
+                const intensity = Math.min(heatValue / heatmapMax, 1);
+                const alpha = 0.15 + intensity * 0.55; // 0.15 ~ 0.7
+                heatBg = `rgba(201, 107, 79, ${alpha})`;
+              }
 
-          return (
-            <View key={dateStr} style={styles.dayCell}>
-              {/* 범위 중간 배경 */}
-              {isRangeMiddle && <View style={styles.rangeBg} />}
-              {isRangeStart && props.mode === 'range' && props.endDate && (
-                <View style={[styles.rangeBg, styles.rangeBgStart]} />
-              )}
-              {isRangeEnd && (
-                <View style={[styles.rangeBg, styles.rangeBgEnd]} />
-              )}
+              return (
+                <View key={dateStr} style={styles.dayCell}>
+                  {/* 범위 중간 배경 */}
+                  {isRangeMiddle && <View style={styles.rangeBg} />}
+                  {isRangeStart && props.mode === 'range' && props.endDate && (
+                    <View style={[styles.rangeBg, styles.rangeBgStart]} />
+                  )}
+                  {isRangeEnd && (
+                    <View style={[styles.rangeBg, styles.rangeBgEnd]} />
+                  )}
 
-              <Pressable
-                style={[
-                  styles.dayButton,
-                  heatBg ? { backgroundColor: heatBg } : undefined,
-                  isSelected && styles.daySelected,
-                  isToday && !isSelected && styles.dayToday,
-                ]}
-                onPress={() => handleDayPress(dateStr)}
-              >
-                <Text
-                  style={[
-                    styles.dayText,
-                    idx % 7 === 0 && styles.sundayText,
-                    isSelected && styles.dayTextSelected,
-                    isToday && !isSelected && styles.dayTextToday,
-                  ]}
-                >
-                  {day}
-                </Text>
-              </Pressable>
+                  <Pressable
+                    style={[
+                      styles.dayButton,
+                      heatBg ? { backgroundColor: heatBg } : undefined,
+                      isSelected && styles.daySelected,
+                      isToday && !isSelected && styles.dayToday,
+                    ]}
+                    onPress={() => handleDayPress(dateStr)}
+                  >
+                    <Text
+                      style={[
+                        styles.dayText,
+                        colIdx === 0 && styles.sundayText,
+                        isSelected && styles.dayTextSelected,
+                        isToday && !isSelected && styles.dayTextToday,
+                      ]}
+                    >
+                      {day}
+                    </Text>
+                  </Pressable>
 
-              {/* dot 마킹 */}
-              {marking && (
-                <View style={styles.dotRow}>
-                  {Array.from({ length: Math.min(marking.dotCount ?? 1, 3) }).map((_, i) => (
-                    <View key={i} style={styles.dot} />
-                  ))}
+                  {/* dot 마킹 */}
+                  {marking && (
+                    <View style={styles.dotRow}>
+                      {Array.from({ length: Math.min(marking.dotCount ?? 1, 3) }).map((_, i) => (
+                        <View key={i} style={styles.dot} />
+                      ))}
+                    </View>
+                  )}
                 </View>
-              )}
-            </View>
-          );
-        })}
+              );
+            })}
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -322,12 +331,8 @@ const styles = StyleSheet.create({
   sundayText: {
     color: colors.danger,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
   dayCell: {
-    width: `${100 / 7}%`,
+    flex: 1,
     alignItems: 'center',
     marginBottom: 2,
     position: 'relative',

@@ -40,7 +40,7 @@ body {
 
 .logo-badge {
   background: #39C5BB;
-  color: #0D4F52;
+  color: #FFFFFF;
   font-size: 12px;
   font-weight: 800;
   padding: 2px 7px;
@@ -395,7 +395,7 @@ body {
 
 .quiz-mode-btn.active {
   background: #39C5BB;
-  color: #0D4F52;
+  color: #FFFFFF;
 }
 
 /* Quiz card */

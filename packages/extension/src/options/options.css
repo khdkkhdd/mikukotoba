@@ -29,7 +29,7 @@ body {
 
 .logo-badge {
   background: #39C5BB;
-  color: #0D4F52;
+  color: #FFFFFF;
   font-size: 13px;
   font-weight: 800;
   padding: 3px 8px;
@@ -236,7 +236,7 @@ input[type="color"] {
 .btn-primary {
   background: #39C5BB;
   border-color: #39C5BB;
-  color: #0D4F52;
+  color: #FFFFFF;
 }
 
 .btn-primary:hover {

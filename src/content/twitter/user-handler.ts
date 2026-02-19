@@ -4,7 +4,7 @@ import { translator } from '@/core/translator';
 import { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
 import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
-import { onWordClick } from '@/content/vocab/word-click-callback';
+import { onWordClick } from '@/content/shared/word-click-callback';
 import {
   TRANSLATION_ATTR,
   PROCESSED_ATTR,

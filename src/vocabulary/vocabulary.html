@@ -9,24 +9,30 @@
 <body>
   <div class="vocab-page">
     <header class="page-header">
-      <h1>단어장</h1>
-      <div class="header-right">
+      <div class="header-row-1">
+        <h1><span class="logo-badge">JP</span> 단어장</h1>
+        <span class="total-count" id="totalCount">0개</span>
+        <span class="sync-indicator" id="syncIndicator" title="동기화 상태"></span>
+      </div>
+      <div class="header-row-2">
         <div class="quiz-mode-selector" id="quizModeSelector">
           <button class="quiz-mode-btn active" data-mode="normal">일반</button>
           <button class="quiz-mode-btn" data-mode="hide-meaning">뜻 맞추기</button>
           <button class="quiz-mode-btn" data-mode="hide-word">단어 맞추기</button>
         </div>
-        <span class="total-count" id="totalCount">0개</span>
         <div class="search-box">
           <input type="text" id="searchInput" placeholder="검색..." class="search-input">
         </div>
-        <button id="importBtn" class="btn" title="JSON 가져오기">가져오기</button>
-        <button id="exportBtn" class="btn" title="JSON 내보내기">내보내기</button>
+        <div class="header-actions">
+          <button id="importBtn" class="btn" title="JSON 가져오기">가져오기</button>
+          <button id="exportBtn" class="btn" title="JSON 내보내기">내보내기</button>
+        </div>
       </div>
     </header>
 
     <main id="content" class="content">
       <div class="empty-state" id="emptyState">
+        <div class="empty-icon">📚</div>
         <p>아직 저장된 단어가 없습니다.</p>
         <p class="hint">웹페이지에서 일본어 텍스트를 선택한 후<br>우클릭 → "JP 단어장에 추가"로 단어를 추가하세요.</p>
       </div>

@@ -5,7 +5,7 @@ import type { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { translator } from '@/core/translator';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
 import { escapeHtml } from '@/content/shared/dom-utils';
-import { onWordClick } from '@/content/vocab/word-click-callback';
+import { onWordClick } from '@/content/shared/word-click-callback';
 
 /**
  * Inline translation mode: inserts furigana and translation

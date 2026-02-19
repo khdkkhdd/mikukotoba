@@ -9,7 +9,10 @@
 <body>
   <div class="popup">
     <header class="header">
-      <h1 class="title">JP Helper</h1>
+      <div class="header-left">
+        <span class="logo-badge">JP</span>
+        <h1 class="title">Helper</h1>
+      </div>
       <div class="header-buttons">
         <button id="openVocab" class="icon-btn" title="단어장">📖</button>
         <button id="openOptions" class="icon-btn" title="설정">⚙</button>
@@ -28,20 +31,19 @@
 
     <div class="divider"></div>
 
-    <!-- YouTube Mode Toggle -->
+    <!-- Site Settings Group -->
     <div class="section">
+      <div class="section-title">사이트별 설정</div>
+
       <label class="toggle-row">
         <span>YouTube 자막 번역</span>
         <input type="checkbox" id="youtubeToggle" class="toggle">
       </label>
       <div class="hint">YouTube 영상 페이지에서 자동 활성화</div>
-    </div>
 
-    <div class="divider"></div>
+      <div class="sub-divider"></div>
 
-    <!-- Webpage Mode Selection -->
-    <div class="section">
-      <div class="section-title">웹페이지 모드</div>
+      <div class="sub-section-title">웹페이지 모드</div>
       <label class="radio-row">
         <input type="radio" name="mode" value="hover"> 호버 번역
       </label>
@@ -97,8 +99,7 @@
         <input type="range" id="complexityThreshold" min="0" max="10" step="1">
         <span class="slider-label" id="llmSliderLabel">AI</span>
       </div>
-      <div class="slider-value">현재: <span id="thresholdValue">5</span></div>
-      <div class="usage-estimate"><span id="llmName">AI</span> 사용 비율: ~<span id="llmRatio">35</span>%</div>
+      <div class="slider-info">현재: <span id="thresholdValue">5</span> · <span id="llmName">AI</span> 사용 비율: ~<span id="llmRatio">35</span>%</div>
     </div>
 
     <div class="divider"></div>
@@ -121,12 +122,12 @@
     </div>
 
     <!-- API Status -->
-    <div class="section status-section">
+    <div class="api-status-card">
       <div class="api-status">
-        <span id="papagoStatus" class="status-dot off"></span> Papago
-        <span id="claudeStatus" class="status-dot off"></span> Claude
-        <span id="openaiStatus" class="status-dot off"></span> GPT
-        <span id="geminiStatus" class="status-dot off"></span> Gemini
+        <div class="status-item"><span id="papagoStatus" class="status-dot off"></span> Papago</div>
+        <div class="status-item"><span id="claudeStatus" class="status-dot off"></span> Claude</div>
+        <div class="status-item"><span id="openaiStatus" class="status-dot off"></span> GPT</div>
+        <div class="status-item"><span id="geminiStatus" class="status-dot off"></span> Gemini</div>
       </div>
     </div>
   </div>

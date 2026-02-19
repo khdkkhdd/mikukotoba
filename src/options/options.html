@@ -9,7 +9,7 @@
 <body>
   <div class="options-page">
     <header class="page-header">
-      <h1>JP Helper 설정</h1>
+      <h1><span class="logo-badge">JP</span> Helper 설정</h1>
     </header>
 
     <!-- API Keys Section -->
@@ -17,59 +17,82 @@
       <h2>API 키 설정</h2>
       <p class="help-text">번역 기능을 사용하려면 API 키를 입력해주세요. 키는 이 기기에만 저장됩니다.</p>
 
-      <div class="form-group">
-        <label>Papago Client ID</label>
-        <div class="input-row">
-          <input type="password" id="papagoClientId" placeholder="Naver Cloud Platform Client ID">
-          <button id="togglePapagoId" class="btn-small">표시</button>
+      <details class="api-provider" open>
+        <summary class="api-provider-summary">
+          <span class="provider-icon provider-papago"></span> Papago
+        </summary>
+        <div class="api-provider-content">
+          <div class="form-group">
+            <label>Client ID</label>
+            <div class="input-row">
+              <input type="password" id="papagoClientId" placeholder="Naver Cloud Platform Client ID">
+              <button id="togglePapagoId" class="btn-small">표시</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Client Secret</label>
+            <div class="input-row">
+              <input type="password" id="papagoClientSecret" placeholder="Naver Cloud Platform Client Secret">
+              <button id="togglePapagoSecret" class="btn-small">표시</button>
+            </div>
+          </div>
+          <button id="testPapago" class="btn">연결 테스트</button>
+          <span id="papagoTestResult" class="test-result"></span>
         </div>
-      </div>
+      </details>
 
-      <div class="form-group">
-        <label>Papago Client Secret</label>
-        <div class="input-row">
-          <input type="password" id="papagoClientSecret" placeholder="Naver Cloud Platform Client Secret">
-          <button id="togglePapagoSecret" class="btn-small">표시</button>
+      <details class="api-provider">
+        <summary class="api-provider-summary">
+          <span class="provider-icon provider-claude"></span> Claude
+        </summary>
+        <div class="api-provider-content">
+          <div class="form-group">
+            <label>API Key</label>
+            <div class="input-row">
+              <input type="password" id="claudeApiKey" placeholder="Anthropic API Key (sk-ant-...)">
+              <button id="toggleClaudeKey" class="btn-small">표시</button>
+            </div>
+          </div>
+          <button id="testClaude" class="btn">연결 테스트</button>
+          <span id="claudeTestResult" class="test-result"></span>
         </div>
-      </div>
+      </details>
 
-      <button id="testPapago" class="btn">연결 테스트</button>
-      <span id="papagoTestResult" class="test-result"></span>
-
-      <div class="form-group" style="margin-top: 20px;">
-        <label>Claude API Key</label>
-        <div class="input-row">
-          <input type="password" id="claudeApiKey" placeholder="Anthropic API Key (sk-ant-...)">
-          <button id="toggleClaudeKey" class="btn-small">표시</button>
+      <details class="api-provider">
+        <summary class="api-provider-summary">
+          <span class="provider-icon provider-openai"></span> OpenAI
+        </summary>
+        <div class="api-provider-content">
+          <div class="form-group">
+            <label>API Key</label>
+            <div class="input-row">
+              <input type="password" id="openaiApiKey" placeholder="OpenAI API Key (sk-...)">
+              <button id="toggleOpenaiKey" class="btn-small">표시</button>
+            </div>
+          </div>
+          <button id="testOpenai" class="btn">연결 테스트</button>
+          <span id="openaiTestResult" class="test-result"></span>
         </div>
-      </div>
+      </details>
 
-      <button id="testClaude" class="btn">연결 테스트</button>
-      <span id="claudeTestResult" class="test-result"></span>
-
-      <div class="form-group" style="margin-top: 20px;">
-        <label>OpenAI API Key</label>
-        <div class="input-row">
-          <input type="password" id="openaiApiKey" placeholder="OpenAI API Key (sk-...)">
-          <button id="toggleOpenaiKey" class="btn-small">표시</button>
+      <details class="api-provider">
+        <summary class="api-provider-summary">
+          <span class="provider-icon provider-gemini"></span> Gemini
+        </summary>
+        <div class="api-provider-content">
+          <div class="form-group">
+            <label>API Key</label>
+            <div class="input-row">
+              <input type="password" id="geminiApiKey" placeholder="Google AI Studio API Key">
+              <button id="toggleGeminiKey" class="btn-small">표시</button>
+            </div>
+          </div>
+          <button id="testGemini" class="btn">연결 테스트</button>
+          <span id="geminiTestResult" class="test-result"></span>
         </div>
-      </div>
+      </details>
 
-      <button id="testOpenai" class="btn">연결 테스트</button>
-      <span id="openaiTestResult" class="test-result"></span>
-
-      <div class="form-group" style="margin-top: 20px;">
-        <label>Gemini API Key</label>
-        <div class="input-row">
-          <input type="password" id="geminiApiKey" placeholder="Google AI Studio API Key">
-          <button id="toggleGeminiKey" class="btn-small">표시</button>
-        </div>
-      </div>
-
-      <button id="testGemini" class="btn">연결 테스트</button>
-      <span id="geminiTestResult" class="test-result"></span>
-
-      <button id="saveApiKeys" class="btn btn-primary" style="margin-top: 16px;">키 저장</button>
+      <button id="saveApiKeys" class="btn btn-primary mt-card">키 저장</button>
     </section>
 
     <!-- Display Settings -->
@@ -90,19 +113,31 @@
       <div class="color-grid">
         <div class="form-group">
           <label>원문</label>
-          <input type="color" id="colorOriginal" value="#FFFFFF">
+          <div class="color-input-row">
+            <input type="color" id="colorOriginal" value="#FFFFFF">
+            <span class="color-hex" data-for="colorOriginal">#FFFFFF</span>
+          </div>
         </div>
         <div class="form-group">
           <label>후리가나</label>
-          <input type="color" id="colorFurigana" value="#B0B0B0">
+          <div class="color-input-row">
+            <input type="color" id="colorFurigana" value="#B0B0B0">
+            <span class="color-hex" data-for="colorFurigana">#B0B0B0</span>
+          </div>
         </div>
         <div class="form-group">
           <label>로마지</label>
-          <input type="color" id="colorRomaji" value="#7CB9E8">
+          <div class="color-input-row">
+            <input type="color" id="colorRomaji" value="#7CB9E8">
+            <span class="color-hex" data-for="colorRomaji">#7CB9E8</span>
+          </div>
         </div>
         <div class="form-group">
           <label>번역</label>
-          <input type="color" id="colorTranslation" value="#F0E68C">
+          <div class="color-input-row">
+            <input type="color" id="colorTranslation" value="#F0E68C">
+            <span class="color-hex" data-for="colorTranslation">#F0E68C</span>
+          </div>
         </div>
       </div>
 
@@ -115,7 +150,7 @@
         <div class="preview-translation">먹으러 갔습니다</div>
       </div>
 
-      <h3 style="margin-top: 20px;">인라인 / 후리가나 모드</h3>
+      <h3 class="mt-card">인라인 / 후리가나 모드</h3>
       <p class="help-text">웹페이지 본문에 삽입되는 텍스트 색상 및 크기</p>
 
       <div class="form-group">
@@ -130,15 +165,24 @@
       <div class="color-grid">
         <div class="form-group">
           <label>후리가나</label>
-          <input type="color" id="inlineColorFurigana" value="#888888">
+          <div class="color-input-row">
+            <input type="color" id="inlineColorFurigana" value="#888888">
+            <span class="color-hex" data-for="inlineColorFurigana">#888888</span>
+          </div>
         </div>
         <div class="form-group">
           <label>로마지</label>
-          <input type="color" id="inlineColorRomaji" value="#4A7DFF">
+          <div class="color-input-row">
+            <input type="color" id="inlineColorRomaji" value="#4A7DFF">
+            <span class="color-hex" data-for="inlineColorRomaji">#4A7DFF</span>
+          </div>
         </div>
         <div class="form-group">
           <label>번역</label>
-          <input type="color" id="inlineColorTranslation" value="#555555">
+          <div class="color-input-row">
+            <input type="color" id="inlineColorTranslation" value="#555555">
+            <span class="color-hex" data-for="inlineColorTranslation">#555555</span>
+          </div>
         </div>
       </div>
 
@@ -212,7 +256,7 @@
         <div id="builtInGlossary" class="glossary-list"></div>
       </details>
 
-      <h3 style="margin-top: 16px;">커스텀 용어집</h3>
+      <h3 class="mt-card">커스텀 용어집</h3>
 
       <div class="glossary-add">
         <input type="text" id="glossaryJp" placeholder="일본어">
@@ -228,6 +272,49 @@
         <button id="exportGlossary" class="btn btn-small">CSV 내보내기</button>
         <input type="file" id="glossaryFile" accept=".csv" style="display: none;">
       </div>
+    </section>
+
+    <!-- Google Drive Sync -->
+    <section class="card" id="syncSection">
+      <h2>Google Drive 동기화</h2>
+      <p class="help-text">단어장 데이터를 Google Drive에 동기화하여 기기 간 공유할 수 있습니다.</p>
+
+      <div class="form-group">
+        <label>OAuth Client ID</label>
+        <div class="input-row">
+          <input type="password" id="driveClientId" placeholder="GCP OAuth 2.0 Client ID">
+          <button id="toggleDriveClientId" class="btn-small">표시</button>
+          <button id="saveDriveClientId" class="btn-small btn-primary">저장</button>
+        </div>
+        <p class="help-text">Google Cloud Console에서 발급한 OAuth 2.0 클라이언트 ID를 입력하세요.</p>
+      </div>
+
+      <div class="form-group">
+        <label>Redirect URI <span class="help-text">(GCP 승인된 리디렉션 URI에 추가)</span></label>
+        <div class="input-row">
+          <input type="text" id="driveRedirectUri" readonly>
+          <button id="copyRedirectUri" class="btn-small">복사</button>
+        </div>
+      </div>
+
+      <div id="driveNotConnected">
+        <button id="driveLoginBtn" class="btn btn-primary">Google 계정 연결</button>
+      </div>
+
+      <div id="driveConnected" style="display: none;">
+        <div class="sync-status-row">
+          <div class="sync-info">
+            <span class="sync-email" id="driveEmail"></span>
+            <span class="sync-time" id="lastSyncTime">마지막 동기화: -</span>
+          </div>
+          <div class="sync-actions">
+            <button id="syncNowBtn" class="btn btn-small">지금 동기화</button>
+            <button id="driveLogoutBtn" class="btn btn-small">연결 해제</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="syncResultMsg" class="sync-result"></div>
     </section>
 
     <!-- Cache Management -->

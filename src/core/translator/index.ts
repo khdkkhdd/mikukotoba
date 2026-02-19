@@ -28,6 +28,7 @@ export class Translator {
   // Concurrency control
   private pendingRequests = 0;
   private readonly maxConcurrent = 3;
+  private readonly maxQueueSize = 100;
   private queue: Array<{
     text: string;
     options?: { skipCache?: boolean; forceLLM?: boolean };
@@ -141,6 +142,11 @@ export class Translator {
 
     // Concurrency control
     if (this.pendingRequests >= this.maxConcurrent) {
+      // Reject oldest requests when queue is full
+      while (this.queue.length >= this.maxQueueSize) {
+        const oldest = this.queue.shift()!;
+        oldest.reject(new Error('Translation queue full — request dropped'));
+      }
       log.debug('Queued:', shortText, `pending=${this.pendingRequests}, queued=${this.queue.length}`);
       return new Promise((resolve, reject) => {
         this.queue.push({ text, options, resolve, reject });

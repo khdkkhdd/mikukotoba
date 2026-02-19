@@ -1,4 +1,5 @@
 import type { MorphemeToken } from '@/types';
+import { getTextWithoutRuby } from '@/content/shared/dom-utils';
 
 export type WordClickCallback = (surface: string, reading: string, sentence: string) => void;
 
@@ -220,7 +221,7 @@ export function createRubyClone(
               // Don't trigger on link/mention clicks
               if ((e.target as Element)?.closest?.('a')) return;
               e.stopPropagation();
-              const sentence = clone.textContent?.trim() || '';
+              const sentence = getTextWithoutRuby(clone);
               opts.onWordClick!(s, r, sentence);
             });
           }

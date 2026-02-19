@@ -32,3 +32,11 @@ export function captureSelectionOnContextMenu(): void {
 export function getLastSelectionInfo(): { text: string; sentence: string } | null {
   return lastSelectionInfo;
 }
+
+/**
+ * Bridge selection info from Shadow DOM contexts (e.g. subtitle overlay)
+ * where document-level contextmenu listeners can't capture the selection.
+ */
+export function bridgeSelectionInfo(info: { text: string; sentence: string }): void {
+  lastSelectionInfo = info;
+}

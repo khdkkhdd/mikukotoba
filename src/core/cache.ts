@@ -49,6 +49,12 @@ export class TranslationCache {
         return null;
       }
 
+      // Verify original text matches (hash collision guard)
+      const normalized = source ? `${source}:${text}` : text;
+      if (entry.originalText && entry.originalText !== normalized) {
+        return null;
+      }
+
       // Promote to memory cache
       setMemoryCache(memKey, entry.result);
 
@@ -64,9 +70,11 @@ export class TranslationCache {
     setMemoryCache(memKey, result);
 
     const key = hashKey(text, source);
+    const normalized = source ? `${source}:${text}` : text;
     const entry: CacheEntry = {
       result,
       timestamp: Date.now(),
+      originalText: normalized,
     };
 
     try {

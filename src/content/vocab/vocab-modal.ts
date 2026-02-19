@@ -41,9 +41,6 @@ export function showVocabModal(
         <label class="vm-label">읽기 (히라가나)
           <input class="vm-input" id="vm-reading" value="${esc(autoFill.reading)}">
         </label>
-        <label class="vm-label">로마자
-          <input class="vm-input" id="vm-romaji" value="${esc(autoFill.romaji)}">
-        </label>
         <label class="vm-label">뜻 (한국어)
           <input class="vm-input" id="vm-meaning" value="${esc(autoFill.meaning)}">
         </label>
@@ -91,7 +88,7 @@ export function showVocabModal(
       const entry = buildVocabEntry({
         word: (shadow.getElementById('vm-word') as HTMLInputElement).value.trim(),
         reading: (shadow.getElementById('vm-reading') as HTMLInputElement).value.trim(),
-        romaji: (shadow.getElementById('vm-romaji') as HTMLInputElement).value.trim(),
+        romaji: autoFill.romaji,
         meaning: (shadow.getElementById('vm-meaning') as HTMLInputElement).value.trim(),
         pos: (shadow.getElementById('vm-pos') as HTMLInputElement).value.trim(),
         exampleSentence: (shadow.getElementById('vm-example') as HTMLInputElement).value.trim(),
@@ -159,7 +156,7 @@ function getModalStyles(): string {
     .vm-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.3);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -167,21 +164,21 @@ function getModalStyles(): string {
     }
 
     .vm-modal {
-      background: #1a1a2e;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: #FFFFFF;
+      border: 1px solid #E8E4DF;
       border-radius: 12px;
       padding: 20px 24px;
       min-width: 360px;
       max-width: 480px;
       width: 90vw;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-      color: #e0e0e0;
+      box-shadow: 0 8px 32px rgba(120, 100, 80, 0.15);
+      color: #5C5650;
     }
 
     .vm-header {
       font-size: 16px;
       font-weight: 700;
-      color: #fff;
+      color: #2D2A26;
       margin-bottom: 16px;
     }
 
@@ -190,15 +187,15 @@ function getModalStyles(): string {
       align-items: center;
       gap: 8px;
       padding: 20px 0;
-      color: rgba(255, 255, 255, 0.6);
+      color: #9C958E;
       font-size: 14px;
     }
 
     .vm-spinner {
       width: 16px;
       height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      border-top-color: rgba(255, 255, 255, 0.7);
+      border: 2px solid #E8E4DF;
+      border-top-color: #C96B4F;
       border-radius: 50%;
       animation: vm-spin 0.6s linear infinite;
     }
@@ -218,17 +215,17 @@ function getModalStyles(): string {
       flex-direction: column;
       gap: 3px;
       font-size: 11px;
-      color: #888;
+      color: #9C958E;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
     .vm-input {
-      background: #2a2a40;
-      border: 1px solid #444;
+      background: #F5F2EE;
+      border: 1px solid #E8E4DF;
       border-radius: 6px;
       padding: 8px 10px;
-      color: #e0e0e0;
+      color: #2D2A26;
       font-size: 14px;
       outline: none;
       transition: border-color 150ms;
@@ -236,7 +233,7 @@ function getModalStyles(): string {
     }
 
     .vm-input:focus {
-      border-color: #4a7dff;
+      border-color: #C96B4F;
     }
 
     .vm-buttons {
@@ -257,21 +254,21 @@ function getModalStyles(): string {
     }
 
     .vm-btn-cancel {
-      background: #333;
-      color: #aaa;
+      background: #F0EDE8;
+      color: #5C5650;
     }
 
     .vm-btn-cancel:hover {
-      background: #444;
+      background: #E8E4DF;
     }
 
     .vm-btn-save {
-      background: #4a7dff;
+      background: #C96B4F;
       color: #fff;
     }
 
     .vm-btn-save:hover {
-      background: #5a8dff;
+      background: #B85A40;
     }
   `;
 }

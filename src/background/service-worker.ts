@@ -5,6 +5,8 @@ import { claudeClient } from '@/core/translator/claude';
 import { openaiClient } from '@/core/translator/openai';
 import { geminiClient } from '@/core/translator/gemini';
 import { VocabStorage } from '@/core/vocab-storage';
+import { DriveAuth } from '@/core/drive-auth';
+import { DriveSync } from '@/core/drive-sync';
 
 const SETTINGS_KEY = 'jp_settings';
 const API_KEYS_KEY = 'jp_api_keys';
@@ -301,11 +303,52 @@ async function handleMessage(
       break;
     }
 
+    case 'DRIVE_LOGIN': {
+      try {
+        const status = await DriveAuth.login();
+        sendResponse({ success: true, payload: status });
+      } catch (err) {
+        sendResponse({ success: false, message: String(err) });
+      }
+      break;
+    }
+
+    case 'DRIVE_LOGOUT': {
+      await DriveAuth.logout();
+      sendResponse({ success: true });
+      break;
+    }
+
+    case 'DRIVE_GET_STATUS': {
+      const status = await DriveAuth.getStatus();
+      sendResponse({ payload: status });
+      break;
+    }
+
+    case 'SYNC_PULL': {
+      try {
+        const result = await DriveSync.pull();
+        sendResponse({ success: true, payload: result });
+      } catch (err) {
+        sendResponse({ success: false, message: String(err) });
+      }
+      break;
+    }
+
+    case 'SYNC_GET_STATUS': {
+      const meta = await DriveSync.getMetadata();
+      const driveStatus = await DriveAuth.getStatus();
+      sendResponse({ payload: { ...driveStatus, lastSync: meta.lastSyncTimestamp } });
+      break;
+    }
+
     case 'VOCAB_SAVE': {
       await VocabStorage.addEntry(message.payload);
       // Auto-add to glossary: vocab → glossary sync
       await addVocabToGlossary(message.payload.word, message.payload.meaning);
       sendResponse({ success: true });
+      // Fire-and-forget: push to Drive
+      DriveSync.pushPartition(message.payload.dateAdded).catch(() => {});
       break;
     }
 
@@ -324,12 +367,14 @@ async function handleMessage(
     case 'VOCAB_UPDATE': {
       await VocabStorage.updateEntry(message.payload);
       sendResponse({ success: true });
+      DriveSync.pushPartition(message.payload.dateAdded).catch(() => {});
       break;
     }
 
     case 'VOCAB_DELETE': {
       await VocabStorage.deleteEntry(message.payload.id, message.payload.date);
       sendResponse({ success: true });
+      DriveSync.pushPartitionWithDeletion(message.payload.id, message.payload.date).catch(() => {});
       break;
     }
 
@@ -393,6 +438,11 @@ chrome.commands.onCommand.addListener(async (command) => {
       await broadcastToAllTabs({ type: 'SETTINGS_CHANGED', payload: currentSettings });
       break;
   }
+});
+
+// Sync on browser startup
+chrome.runtime.onStartup.addListener(() => {
+  DriveSync.pull().catch(() => {});
 });
 
 // Watch for settings changes from other contexts

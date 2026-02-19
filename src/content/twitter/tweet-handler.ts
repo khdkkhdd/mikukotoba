@@ -5,7 +5,7 @@ import { escapeHtmlWithBreaks } from '@/content/shared/dom-utils';
 import { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
 import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
-import { onWordClick } from '@/content/vocab/word-click-callback';
+import { onWordClick } from '@/content/shared/word-click-callback';
 import { createInlineBracket } from '@/content/shared/renderers/inline-bracket';
 import { addSpoilerBehavior } from '@/content/shared/renderers/spoiler';
 import {

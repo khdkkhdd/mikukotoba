@@ -2,6 +2,8 @@ import type { TranslationResult, UserSettings, MorphemeToken } from '@/types';
 import type { WordClickCallback } from '@/content/shared/renderers/ruby-injector';
 import { tokensToDetailedFuriganaHTML, tokensToRomaji } from '@/core/analyzer/reading-converter';
 import { formatEngineBadge } from '@/content/shared/renderers/engine-badge';
+import { getTextWithoutRuby } from '@/content/shared/dom-utils';
+import { bridgeSelectionInfo } from '@/content/vocab/selection-capture';
 
 /**
  * Custom subtitle overlay that replaces YouTube's built-in captions.
@@ -43,6 +45,32 @@ export class SubtitleOverlay {
     this.shadowRoot.appendChild(this.overlay);
 
     player.appendChild(this.container);
+
+    // Stop mouse events from reaching YouTube player (play/pause, seek).
+    // This enables text drag-selection inside the overlay.
+    for (const evt of ['mousedown', 'mouseup', 'click', 'dblclick'] as const) {
+      this.overlay.addEventListener(evt, (e) => e.stopPropagation());
+    }
+
+    // Capture text selection for context-menu vocab add.
+    // Shadow DOM selections aren't visible to document-level listeners,
+    // so we bridge the selected text out to selection-capture.
+    // Also stopPropagation to prevent YouTube's custom context menu.
+    this.overlay.addEventListener('contextmenu', (e) => {
+      e.stopPropagation();
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) {
+        const text = sel.toString().trim();
+        if (text) {
+          // Build sentence from current tokens (clean, no furigana)
+          const lineEl = this.overlay?.querySelector('.line-original');
+          const sentence = lineEl
+            ? getTextWithoutRuby(lineEl)
+            : text;
+          bridgeSelectionInfo({ text, sentence });
+        }
+      }
+    });
 
     // Hide YouTube's built-in captions
     this.hideYouTubeCaptions();
@@ -167,7 +195,7 @@ export class SubtitleOverlay {
   private setupWordClickHandlers(tokens: MorphemeToken[]): void {
     if (!this.overlay || !this.onWordClick) return;
 
-    const sentence = this.overlay.querySelector('.line-original')?.textContent?.trim() || '';
+    const sentence = tokens.map(t => t.surface).join('');
     const wordSpans = this.overlay.querySelectorAll('.word');
     wordSpans.forEach((span) => {
       span.addEventListener('click', (e) => {
@@ -226,6 +254,8 @@ export class SubtitleOverlay {
         transition: opacity 200ms ease;
         font-family: 'Noto Sans JP', 'Yu Gothic', 'Hiragino Kaku Gothic Pro', sans-serif;
         line-height: 1.6;
+        user-select: text;
+        -webkit-user-select: text;
       }
 
       .line-original {

@@ -122,14 +122,23 @@ export class GlossaryManager {
   apply(translation: string, original: string): string {
     const allEntries = this.getAll();
     let result = translation;
+    const annotations: string[] = [];
 
     for (const entry of allEntries) {
-      if (original.includes(entry.japanese)) {
-        // The original contains this term — but we don't forcefully replace
-        // in the translation since it might already be correct.
-        // Only replace if we find a common mistranslation pattern.
-        // This is a simple heuristic.
-      }
+      if (!original.includes(entry.japanese)) continue;
+
+      // Check if the translation already contains the preferred Korean term
+      if (result.includes(entry.korean)) continue;
+
+      // Term is in the original but missing from translation — add annotation
+      const annotation = entry.note
+        ? `${entry.japanese}: ${entry.korean} (${entry.note})`
+        : `${entry.japanese}: ${entry.korean}`;
+      annotations.push(annotation);
+    }
+
+    if (annotations.length > 0) {
+      result = `${result} (${annotations.join(', ')})`;
     }
 
     return result;

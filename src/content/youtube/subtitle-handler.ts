@@ -5,7 +5,7 @@ import { translator } from '@/core/translator';
 import { VideoObserver } from './video-observer';
 import { SubtitleExtractor } from './subtitle-extractor';
 import { SubtitleOverlay } from './subtitle-overlay';
-import { onWordClick } from '@/content/vocab/word-click-callback';
+import { onWordClick } from '@/content/shared/word-click-callback';
 import { createLogger } from '@/core/logger';
 
 const log = createLogger('YouTube:Subtitle');

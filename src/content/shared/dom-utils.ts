@@ -132,23 +132,19 @@ export function createShadowContainer(id: string): {
   return { container, shadowRoot };
 }
 
-/**
- * Escape HTML entities
- */
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+// escapeHtml / escapeHtmlWithBreaks — canonical implementation lives in core
+export { escapeHtml, escapeHtmlWithBreaks } from '@/core/utils/html';
 
 /**
- * Escape HTML entities and preserve line breaks as <br>.
- * Use for multi-line content (translations, comments) rendered via innerHTML.
+ * Get textContent from an element while stripping ruby annotation (<rt>) text.
+ * Useful for extracting clean sentences from furigana-annotated DOM.
  */
-export function escapeHtmlWithBreaks(text: string): string {
-  return escapeHtml(text).replace(/\n/g, '<br>');
+export function getTextWithoutRuby(el: Node): string {
+  const clone = el.cloneNode(true);
+  if (clone instanceof Element) {
+    clone.querySelectorAll('rt, rp').forEach(rt => rt.remove());
+  }
+  return clone.textContent?.trim() || '';
 }
 
 /**

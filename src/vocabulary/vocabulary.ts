@@ -85,7 +85,6 @@ function renderEntry(entry: VocabEntry, query: string): HTMLElement {
   const hideReading = hideWord || hideMeaning;
   const wordHtml = hideWord ? quizHidden(hl(entry.word)) : hl(entry.word);
   const readingHtml = hideReading ? quizHidden(hl(entry.reading)) : hl(entry.reading);
-  const romajiHtml = hideReading ? quizHidden(hl(entry.romaji)) : hl(entry.romaji);
   const meaningHtml = hideMeaning ? quizHidden(hl(entry.meaning)) : hl(entry.meaning);
 
   let sourceHtml = '';
@@ -106,7 +105,6 @@ function renderEntry(entry: VocabEntry, query: string): HTMLElement {
     <div class="entry-top">
       <span class="entry-word">${wordHtml}</span>
       <span class="entry-reading">${readingHtml}</span>
-      <span class="entry-romaji">${romajiHtml}</span>
       ${entry.pos ? `<span class="entry-pos">${escapeHtml(entry.pos)}</span>` : ''}
     </div>
     <div class="entry-meaning">${meaningHtml}</div>
@@ -165,7 +163,6 @@ function startInlineEdit(entry: VocabEntry, card: HTMLElement): void {
   const fields: Array<{ key: keyof VocabEntry; label: string }> = [
     { key: 'word', label: '단어' },
     { key: 'reading', label: '읽기' },
-    { key: 'romaji', label: '로마자' },
     { key: 'meaning', label: '뜻' },
     { key: 'pos', label: '품사' },
     { key: 'exampleSentence', label: '예문' },
@@ -211,7 +208,6 @@ function startInlineEdit(entry: VocabEntry, card: HTMLElement): void {
       ...entry,
       word: inputs.word.value.trim(),
       reading: inputs.reading.value.trim(),
-      romaji: inputs.romaji.value.trim(),
       meaning: inputs.meaning.value.trim(),
       pos: inputs.pos.value.trim(),
       exampleSentence: inputs.exampleSentence.value.trim(),
@@ -425,8 +421,48 @@ function setQuizMode(mode: QuizMode): void {
 
 // ──────────────── Init ────────────────
 
+async function syncOnLoad(): Promise<void> {
+  const indicator = document.getElementById('syncIndicator')!;
+
+  try {
+    // Check if logged in
+    const statusResp = await sendMessage<{ payload: { loggedIn: boolean } }>({
+      type: 'DRIVE_GET_STATUS',
+    });
+
+    if (!statusResp?.payload?.loggedIn) {
+      indicator.className = 'sync-indicator';
+      indicator.title = 'Drive 미연결';
+      return;
+    }
+
+    indicator.className = 'sync-indicator syncing';
+    indicator.title = '동기화 중...';
+
+    const resp = await sendMessage<{ success: boolean; payload?: { changed: boolean } }>({
+      type: 'SYNC_PULL',
+    });
+
+    if (resp?.success && resp.payload?.changed) {
+      indicator.className = 'sync-indicator synced';
+      indicator.title = '동기화 완료 (변경사항 적용됨)';
+      // Reload data
+      allDates = [];
+      loadedDateCount = 0;
+      await loadInitial();
+    } else {
+      indicator.className = 'sync-indicator synced';
+      indicator.title = '최신 상태';
+    }
+  } catch {
+    indicator.className = 'sync-indicator sync-error';
+    indicator.title = '동기화 실패';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   loadInitial();
+  syncOnLoad();
 
   // Quiz mode selector
   document.querySelectorAll('.quiz-mode-btn').forEach((btn) => {

@@ -1,4 +1,4 @@
-import type { UserSettings, UsageStats, GlossaryEntry, LLMPlatform } from '@/types';
+import type { UserSettings, UsageStats, GlossaryEntry, LLMPlatform, DriveStatus, SyncResult } from '@/types';
 import { DEFAULT_SETTINGS } from '@/types';
 import { getModelsForPlatform } from '@/core/translator/llm-registry';
 
@@ -68,6 +68,7 @@ function updateUI(): void {
   loadGlossary();
   loadStats();
   loadCacheStats();
+  loadDriveStatus();
 }
 
 function populateModelDropdown(platform: LLMPlatform, selectedModel?: string): void {
@@ -360,6 +361,8 @@ function setupEventListeners(): void {
   for (const colorId of ['colorOriginal', 'colorFurigana', 'colorRomaji', 'colorTranslation'] as const) {
     document.getElementById(colorId)!.addEventListener('input', (e) => {
       const value = (e.target as HTMLInputElement).value;
+      const hexLabel = document.querySelector(`.color-hex[data-for="${colorId}"]`);
+      if (hexLabel) hexLabel.textContent = value.toUpperCase();
       saveSettings({ [colorId]: value });
       updatePreview();
     });
@@ -368,6 +371,8 @@ function setupEventListeners(): void {
   for (const colorId of ['inlineColorFurigana', 'inlineColorRomaji', 'inlineColorTranslation'] as const) {
     document.getElementById(colorId)!.addEventListener('input', (e) => {
       const value = (e.target as HTMLInputElement).value;
+      const hexLabel = document.querySelector(`.color-hex[data-for="${colorId}"]`);
+      if (hexLabel) hexLabel.textContent = value.toUpperCase();
       saveSettings({ [colorId]: value });
       updateInlinePreview();
     });
@@ -490,6 +495,122 @@ function setupEventListeners(): void {
     await chrome.runtime.sendMessage({ type: 'CLEAR_CACHE' });
     loadCacheStats();
   });
+
+  // Google Drive sync
+  setupDriveListeners();
+}
+
+// ──────────────── Google Drive Sync ────────────────
+
+const DRIVE_CLIENT_ID_KEY = 'jp_drive_client_id';
+
+async function loadDriveClientId(): Promise<void> {
+  const data = await chrome.storage.local.get(DRIVE_CLIENT_ID_KEY);
+  const value = data[DRIVE_CLIENT_ID_KEY] || '';
+  (document.getElementById('driveClientId') as HTMLInputElement).value = value;
+
+  // Show redirect URI for GCP configuration
+  const redirectUri = chrome.identity.getRedirectURL();
+  (document.getElementById('driveRedirectUri') as HTMLInputElement).value = redirectUri;
+}
+
+async function loadDriveStatus(): Promise<void> {
+  await loadDriveClientId();
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: 'SYNC_GET_STATUS' });
+    const status = resp?.payload as (DriveStatus & { lastSync?: number }) | undefined;
+
+    const notConnected = document.getElementById('driveNotConnected')!;
+    const connected = document.getElementById('driveConnected')!;
+
+    if (status?.loggedIn) {
+      notConnected.style.display = 'none';
+      connected.style.display = '';
+      document.getElementById('driveEmail')!.textContent = status.email || '';
+      if (status.lastSync) {
+        document.getElementById('lastSyncTime')!.textContent =
+          `마지막 동기화: ${new Date(status.lastSync).toLocaleString('ko-KR')}`;
+      }
+    } else {
+      notConnected.style.display = '';
+      connected.style.display = 'none';
+    }
+  } catch {
+    // Drive status check failed — leave default (not connected)
+  }
+}
+
+function showSyncMessage(text: string, type: 'success' | 'error' | 'syncing'): void {
+  const msg = document.getElementById('syncResultMsg')!;
+  msg.textContent = text;
+  msg.className = `sync-result ${type}`;
+}
+
+function setupDriveListeners(): void {
+  // Client ID save & toggle
+  setupPasswordToggle('toggleDriveClientId', 'driveClientId');
+
+  document.getElementById('copyRedirectUri')!.addEventListener('click', () => {
+    const input = document.getElementById('driveRedirectUri') as HTMLInputElement;
+    navigator.clipboard.writeText(input.value);
+    const btn = document.getElementById('copyRedirectUri')!;
+    btn.textContent = '복사됨';
+    setTimeout(() => { btn.textContent = '복사'; }, 1500);
+  });
+
+  document.getElementById('saveDriveClientId')!.addEventListener('click', async () => {
+    const value = (document.getElementById('driveClientId') as HTMLInputElement).value.trim();
+    await chrome.storage.local.set({ [DRIVE_CLIENT_ID_KEY]: value });
+    const btn = document.getElementById('saveDriveClientId')!;
+    btn.textContent = '저장됨';
+    setTimeout(() => { btn.textContent = '저장'; }, 1500);
+  });
+
+  document.getElementById('driveLoginBtn')!.addEventListener('click', async () => {
+    const btn = document.getElementById('driveLoginBtn') as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = '연결 중...';
+
+    try {
+      const resp = await chrome.runtime.sendMessage({ type: 'DRIVE_LOGIN' });
+      if (resp?.success) {
+        await loadDriveStatus();
+      } else {
+        btn.textContent = 'Google 계정 연결';
+        btn.disabled = false;
+        showSyncMessage(resp?.message || '로그인 실패', 'error');
+      }
+    } catch {
+      btn.textContent = 'Google 계정 연결';
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('driveLogoutBtn')!.addEventListener('click', async () => {
+    await chrome.runtime.sendMessage({ type: 'DRIVE_LOGOUT' });
+    loadDriveStatus();
+  });
+
+  document.getElementById('syncNowBtn')!.addEventListener('click', async () => {
+    showSyncMessage('동기화 중...', 'syncing');
+
+    try {
+      const resp = await chrome.runtime.sendMessage({ type: 'SYNC_PULL' });
+      if (resp?.success) {
+        const result = resp.payload as SyncResult;
+        if (result.changed) {
+          showSyncMessage(`동기화 완료: ${result.pulled}개 받음, ${result.pushed}개 보냄`, 'success');
+        } else {
+          showSyncMessage('이미 최신 상태입니다.', 'success');
+        }
+      } else {
+        showSyncMessage(resp?.message || '동기화 실패', 'error');
+      }
+      await loadDriveStatus();
+    } catch {
+      showSyncMessage('동기화 중 오류 발생', 'error');
+    }
+  });
 }
 
 // ──────────────── Helpers ────────────────
@@ -504,6 +625,8 @@ function setInputValue(id: string, value: string): void {
 
 function setColorValue(id: string, value: string): void {
   (document.getElementById(id) as HTMLInputElement).value = value;
+  const hexLabel = document.querySelector(`.color-hex[data-for="${id}"]`);
+  if (hexLabel) hexLabel.textContent = value.toUpperCase();
 }
 
 function setRangeWithLabel(id: string, value: number, labelId: string): void {

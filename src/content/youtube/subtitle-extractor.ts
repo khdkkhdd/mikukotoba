@@ -37,6 +37,7 @@ export class SubtitleExtractor {
   private timedTextEntries: SubtitleEntry[] = [];
   private timeUpdateHandler: (() => void) | null = null;
   private lastDisplayedText: string = '';
+  private videoElement: HTMLVideoElement | null = null;
 
   constructor(onSubtitle: SubtitleCallback, onClear?: () => void) {
     this.onSubtitle = onSubtitle;
@@ -125,12 +126,12 @@ export class SubtitleExtractor {
       this.trackListener = null;
     }
     if (this.timeUpdateHandler) {
-      const video = document.querySelector('video');
-      if (video) {
-        video.removeEventListener('timeupdate', this.timeUpdateHandler);
+      if (this.videoElement) {
+        this.videoElement.removeEventListener('timeupdate', this.timeUpdateHandler);
       }
       this.timeUpdateHandler = null;
     }
+    this.videoElement = null;
     this.activeMethod = null;
     this.timedTextEntries = [];
     this.lastDisplayedText = '';
@@ -424,6 +425,7 @@ export class SubtitleExtractor {
 
       const video = document.querySelector('video');
       if (!video) return false;
+      this.videoElement = video;
 
       this.timeUpdateHandler = () => {
         const currentTime = video.currentTime;

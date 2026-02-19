@@ -1,5 +1,5 @@
 import type { MorphemeToken } from '@/types';
-import { escapeHtml, escapeHtmlWithBreaks } from '@/content/shared/dom-utils';
+import { escapeHtml, escapeHtmlWithBreaks } from '@/core/utils/html';
 
 const KANJI_REGEX = /[\u4E00-\u9FFF\u3400-\u4DBF]/;
 

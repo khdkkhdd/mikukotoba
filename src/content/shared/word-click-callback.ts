@@ -5,7 +5,7 @@ import type { WordClickCallback } from '@/content/shared/renderers/ruby-injector
  * All renderers use this single callback instance.
  */
 export const onWordClick: WordClickCallback = (surface, reading, sentence) => {
-  import('./vocab-click-handler').then(({ handleWordClick }) => {
+  import('@/content/vocab/vocab-click-handler').then(({ handleWordClick }) => {
     handleWordClick(surface, reading, sentence);
   });
 };

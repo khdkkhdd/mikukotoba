@@ -162,10 +162,30 @@ export interface VocabStorageIndex {
   totalCount: number;
 }
 
+// Google Drive 동기화
+export interface SyncMetadata {
+  lastSyncTimestamp: number;
+  partitionVersions: Record<string, number>;  // date → timestamp
+  driveFileIds: Record<string, string>;       // filename → Drive file ID
+  deletedEntries: Record<string, number>;     // entryId → deletion timestamp
+}
+
+export interface DriveStatus {
+  loggedIn: boolean;
+  email?: string;
+}
+
+export interface SyncResult {
+  changed: boolean;
+  pulled: number;
+  pushed: number;
+}
+
 // 캐시 항목
 export interface CacheEntry {
   result: TranslationResult;
   timestamp: number;
+  originalText?: string;
 }
 
 // 사용 통계
@@ -214,7 +234,12 @@ export type MessageType =
   | { type: 'VOCAB_DELETE'; payload: { id: string; date: string } }
   | { type: 'VOCAB_SEARCH'; payload: { query: string } }
   | { type: 'VOCAB_EXPORT' }
-  | { type: 'VOCAB_IMPORT'; payload: { entries: VocabEntry[] } };
+  | { type: 'VOCAB_IMPORT'; payload: { entries: VocabEntry[] } }
+  | { type: 'DRIVE_LOGIN' }
+  | { type: 'DRIVE_LOGOUT' }
+  | { type: 'DRIVE_GET_STATUS' }
+  | { type: 'SYNC_PULL' }
+  | { type: 'SYNC_GET_STATUS' };
 
 // 기본 설정값
 export const DEFAULT_SETTINGS: UserSettings = {

@@ -325,15 +325,15 @@ export class HoverTooltip {
   private getStyles(): string {
     return `
       .ht-content {
-        background: rgba(25, 25, 35, 0.97);
-        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(30, 28, 25, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 8px;
         padding: 10px 14px;
         min-width: 120px;
         max-width: 420px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
         font-family: 'Noto Sans JP', 'Yu Gothic', sans-serif;
-        color: #fff;
+        color: #f0ede8;
         user-select: text;
         cursor: auto;
         max-height: 60vh;
@@ -383,8 +383,8 @@ export class HoverTooltip {
       .ht-spinner {
         width: 10px;
         height: 10px;
-        border: 2px solid rgba(255, 255, 255, 0.2);
-        border-top-color: rgba(255, 255, 255, 0.6);
+        border: 2px solid rgba(255, 255, 255, 0.15);
+        border-top-color: #C96B4F;
         border-radius: 50%;
         animation: ht-spin 0.6s linear infinite;
       }

@@ -11,7 +11,7 @@ import { BatchedObserver } from '@/content/shared/batched-observer';
 import { createInlineBlock } from '@/content/shared/renderers/inline-block';
 import { createStyledFuriganaBlock } from '@/content/shared/renderers/furigana-block';
 import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
-import { onWordClick } from '@/content/vocab/word-click-callback';
+import { onWordClick } from '@/content/shared/word-click-callback';
 import { HoverTooltip } from '@/content/shared/renderers/hover-tooltip';
 import { MorphologicalAnalyzer } from '@/core/analyzer/morphological';
 import {

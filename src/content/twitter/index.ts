@@ -1,12 +1,15 @@
 import type { UserSettings } from '@/types';
 import type { StatusIndicator } from '@/content/shared/status-indicator';
+import { needsRenderRestart } from '@/content/handlers/types';
 import type { SiteHandler } from '@/content/handlers/types';
 import { translator } from '@/core/translator';
 import { HoverTooltip } from '@/content/shared/renderers/hover-tooltip';
-import { TwitterObserver } from './observer';
+import { BatchedObserver } from '@/content/shared/batched-observer';
+import type { SelectorRoute } from '@/content/shared/batched-observer';
 import { TweetHandler } from './tweet-handler';
 import { UserHandler } from './user-handler';
 import { TrendHandler } from './trend-handler';
+import { SELECTORS, PROCESSED_ATTR, TRANSLATION_ATTR, isEditableArea } from './utils';
 import { createLogger } from '@/core/logger';
 import './twitter.css';
 
@@ -28,7 +31,7 @@ export class TwitterHandler implements SiteHandler {
   readonly priority = 10;
 
   private settings: UserSettings;
-  private observer: TwitterObserver | null = null;
+  private observer: BatchedObserver | null = null;
   private tweetHandler: TweetHandler;
   private userHandler: UserHandler;
   private trendHandler: TrendHandler;
@@ -70,17 +73,33 @@ export class TwitterHandler implements SiteHandler {
     // Initialize shared hover tooltip for user names/locations and tweet hover mode
     this.initHoverTooltip();
 
-    // Create observer with routing callbacks
-    this.observer = new TwitterObserver({
-      onTweetText: (el) => this.tweetHandler.processTweetText(el),
-      onCardWrapper: (el) => this.tweetHandler.processCard(el),
-      onUserName: (el) => this.userHandler.processUserName(el),
-      onUserNameProfile: (el) => this.userHandler.processProfileName(el),
-      onUserDescription: (el) => this.userHandler.processUserDescription(el),
-      onUserLocation: (el) => this.userHandler.processUserLocation(el),
-      onUserCell: (el) => this.userHandler.processUserCell(el),
-      onSocialContext: (el) => this.userHandler.processSocialContext(el),
-      onTrend: (el) => this.trendHandler.processTrend(el),
+    // Create observer with selector-based routing
+    const routes: SelectorRoute[] = [
+      { selector: SELECTORS.TWEET_TEXT, callback: (el) => this.tweetHandler.processTweetText(el) },
+      { selector: SELECTORS.CARD_WRAPPER, callback: (el) => this.tweetHandler.processCard(el) },
+      { selector: SELECTORS.USER_NAME, callback: (el) => this.userHandler.processUserName(el) },
+      { selector: SELECTORS.USER_NAME_PROFILE, callback: (el) => this.userHandler.processProfileName(el) },
+      { selector: SELECTORS.USER_DESCRIPTION, callback: (el) => this.userHandler.processUserDescription(el) },
+      { selector: SELECTORS.USER_LOCATION, callback: (el) => this.userHandler.processUserLocation(el) },
+      { selector: SELECTORS.USER_CELL, callback: (el) => this.userHandler.processUserCell(el) },
+      { selector: SELECTORS.SOCIAL_CONTEXT, callback: (el) => this.userHandler.processSocialContext(el) },
+      { selector: SELECTORS.TREND, callback: (el) => this.trendHandler.processTrend(el) },
+    ];
+
+    this.observer = new BatchedObserver(routes, {
+      logNamespace: 'Twitter:Observer',
+      characterData: true,
+      characterDataAncestorResolver: (node: Node) => {
+        return node.parentElement?.closest<HTMLElement>(
+          `${SELECTORS.TWEET_TEXT}, ${SELECTORS.USER_DESCRIPTION}`
+        ) ?? null;
+      },
+      shouldSkip: (el) => {
+        if (el.hasAttribute(TRANSLATION_ATTR) || el.hasAttribute(PROCESSED_ATTR)) return true;
+        if (isEditableArea(el)) return true;
+        return false;
+      },
+      scanExisting: true,
     });
 
     this.observer.start();
@@ -110,13 +129,7 @@ export class TwitterHandler implements SiteHandler {
     const prev = this.settings;
     this.settings = settings;
 
-    const needsRestart =
-      settings.webpageMode !== prev.webpageMode ||
-      settings.showFurigana !== prev.showFurigana ||
-      settings.showTranslation !== prev.showTranslation ||
-      settings.showRomaji !== prev.showRomaji;
-
-    if (needsRestart) {
+    if (needsRenderRestart(prev, settings)) {
       log.info('Rendering settings changed, restarting');
       this.stop();
       // Recreate sub-handlers with fresh hoverTargets

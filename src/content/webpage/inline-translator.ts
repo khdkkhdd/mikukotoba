@@ -1,10 +1,10 @@
 import type { UserSettings } from '@/types';
 import type { DetectedBlock } from './text-detector';
 import type { StatusIndicator } from '@/content/shared/status-indicator';
+import type { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { translator } from '@/core/translator';
-import { tokensToDetailedFuriganaHTML } from '@/core/analyzer/reading-converter';
-import { escapeHtml, escapeHtmlWithBreaks } from '@/content/shared/dom-utils';
-import { formatEngineBadgeWithRetry } from '@/content/shared/renderers/engine-badge';
+import { createInlineBlock } from '@/content/shared/renderers/inline-block';
+import { escapeHtml } from '@/content/shared/dom-utils';
 
 /**
  * Inline translation mode: inserts furigana and translation
@@ -12,12 +12,12 @@ import { formatEngineBadgeWithRetry } from '@/content/shared/renderers/engine-ba
  */
 export class InlineTranslator {
   private settings: UserSettings;
-  private processedBlocks = new WeakSet<HTMLElement>();
-  private translationElements: HTMLElement[] = [];
+  private tracker: ProcessedTracker;
   private status: StatusIndicator | null = null;
 
-  constructor(settings: UserSettings) {
+  constructor(settings: UserSettings, tracker: ProcessedTracker) {
     this.settings = settings;
+    this.tracker = tracker;
   }
 
   setStatusIndicator(indicator: StatusIndicator): void {
@@ -43,16 +43,13 @@ export class InlineTranslator {
   }
 
   private async processBlock(block: DetectedBlock): Promise<void> {
-    if (this.processedBlocks.has(block.element)) return;
-    this.processedBlocks.add(block.element);
+    if (this.tracker.isProcessed(block.element)) return;
+    this.tracker.markProcessed(block.element, block.text);
 
     this.status?.translating();
 
     try {
       const result = await translator.translate(block.text);
-
-      // Mark as processed only after successful translation
-      block.element.setAttribute('data-jp-processed', 'true');
 
       // Insert furigana into the original text nodes
       if (this.settings.showFurigana) {
@@ -61,62 +58,28 @@ export class InlineTranslator {
 
       // Insert translation below the block
       if (this.settings.showTranslation) {
-        const translationEl = document.createElement('div');
-        translationEl.className = 'jp-inline-translation';
-        translationEl.setAttribute('data-jp-translation', 'true');
-        translationEl.setAttribute('data-jp-processed', 'true');
-
-        const buildContent = (r: typeof result) => {
-          let c = '';
-          if (this.settings.showRomaji) {
-            const romaji = r.tokens.map((t) => t.romaji).join(' ');
-            c += `<div class="jp-inline-romaji">${escapeHtml(romaji)}</div>`;
-          }
-          c += escapeHtmlWithBreaks(r.korean);
-          c += `<div class="jp-inline-engine-badge">${formatEngineBadgeWithRetry(r, 'jp-inline')}</div>`;
-          return c;
-        };
-
-        translationEl.innerHTML = buildContent(result);
-
-        const attachRetry = (el: HTMLElement) => {
-          const btn = el.querySelector<HTMLElement>('.jp-inline-retry-btn');
-          if (btn) {
-            btn.addEventListener('click', async (e) => {
-              e.stopPropagation();
-              btn.classList.add('jp-inline-retry-spinning');
-              try {
-                const newResult = await translator.retranslate(block.text);
-                el.innerHTML = buildContent(newResult);
-                attachRetry(el);
-              } catch {
-                btn.classList.remove('jp-inline-retry-spinning');
-              }
-            });
-          }
-        };
-        attachRetry(translationEl);
-
-        // Insert after the block element
         const target = block.element;
 
         // Remove orphaned translations at insertion point
-        // (YouTube re-renders can replace elements, leaving old translations behind)
-        let orphan = target.nextElementSibling;
-        while (orphan?.hasAttribute('data-jp-translation')) {
-          const next = orphan.nextElementSibling;
-          orphan.remove();
-          orphan = next;
-        }
+        this.tracker.removeExistingTranslation(target);
+
+        const translationEl = createInlineBlock(result, this.settings, {
+          classPrefix: 'jp-inline',
+          className: 'jp-inline-translation',
+          translationAttr: 'data-jp-translation',
+          spoiler: true,
+          skipFurigana: true,
+          onRetranslate: () => translator.retranslate(block.text),
+        });
 
         target.insertAdjacentElement('afterend', translationEl);
-        this.translationElements.push(translationEl);
+        this.tracker.trackInjected(translationEl);
       }
 
       this.status?.translated();
     } catch {
       // Allow retry: remove from processed set so it can be re-detected
-      this.processedBlocks.delete(block.element);
+      this.tracker.unmarkProcessed(block.element);
       this.status?.failed();
     }
   }
@@ -170,16 +133,6 @@ export class InlineTranslator {
    * Remove all injected translations and furigana
    */
   cleanup(): void {
-    for (const el of this.translationElements) {
-      el.remove();
-    }
-    this.translationElements = [];
-
-    // Remove furigana spans
-    document.querySelectorAll('[data-jp-processed]').forEach((el) => {
-      el.removeAttribute('data-jp-processed');
-    });
-
-    this.processedBlocks = new WeakSet();
+    this.tracker.cleanup();
   }
 }

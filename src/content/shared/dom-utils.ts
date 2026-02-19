@@ -69,6 +69,20 @@ export function japaneseRatio(text: string): number {
 }
 
 /**
+ * Check if short text (e.g. display names) is Japanese.
+ * For short texts, also checks CJK ratio >= 50% even without kana.
+ */
+export function isJapaneseShortText(text: string): boolean {
+  if (!text) return false;
+  if (isJapanese(text)) return true;
+
+  // For short text: CJK characters without kana (e.g. pure kanji names like 田中太郎)
+  const cjkChars = (text.match(/[\u4E00-\u9FFF\u3400-\u4DBF]/g) || []).length;
+  const totalChars = text.replace(/\s/g, '').length;
+  return totalChars > 0 && cjkChars / totalChars >= 0.5;
+}
+
+/**
  * Walk text nodes in a DOM subtree
  */
 export function walkTextNodes(

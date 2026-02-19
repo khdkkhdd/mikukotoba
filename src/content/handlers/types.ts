@@ -2,6 +2,19 @@ import type { UserSettings } from '@/types';
 import type { StatusIndicator } from '@/content/shared/status-indicator';
 
 /**
+ * Check if rendering-related settings changed enough to require a full restart.
+ * Shared across all site handlers that use webpageMode.
+ */
+export function needsRenderRestart(prev: UserSettings, next: UserSettings): boolean {
+  return (
+    next.webpageMode !== prev.webpageMode ||
+    next.showFurigana !== prev.showFurigana ||
+    next.showTranslation !== prev.showTranslation ||
+    next.showRomaji !== prev.showRomaji
+  );
+}
+
+/**
  * Common interface for all site-specific translation handlers.
  *
  * Each handler manages its own DOM observation, text detection,

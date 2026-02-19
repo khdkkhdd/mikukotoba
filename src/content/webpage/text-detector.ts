@@ -1,3 +1,4 @@
+import type { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { walkTextNodes, isJapanese, japaneseRatio } from '@/content/shared/dom-utils';
 
 export interface DetectedBlock {
@@ -16,24 +17,23 @@ type DetectionCallback = (blocks: DetectedBlock[]) => void;
  *   B. MutationObserver (characterData) — text filled after node insertion
  *   C. IntersectionObserver — viewport-based catch for missed elements
  *
- * Cost guard: processedElements WeakSet + processedTexts Map prevent
- * duplicate callbacks (and therefore duplicate API calls).
+ * Cost guard: ProcessedTracker prevents duplicate callbacks
+ * (and therefore duplicate API calls).
  */
 export class TextDetector {
   private mutationObserver: MutationObserver | null = null;
   private intersectionObserver: IntersectionObserver | null = null;
   private onDetected: DetectionCallback;
-
-  private processedElements = new WeakSet<HTMLElement>();
-  private processedTexts = new WeakMap<HTMLElement, string>();
+  private tracker: ProcessedTracker;
 
   // Mutation queue: accumulate instead of drop
   private pendingNodes = new Set<HTMLElement>();
   private pendingCharDataNodes = new Set<HTMLElement>();
   private scheduled = false;
 
-  constructor(onDetected: DetectionCallback) {
+  constructor(onDetected: DetectionCallback, tracker: ProcessedTracker) {
     this.onDetected = onDetected;
+    this.tracker = tracker;
   }
 
   start(): void {
@@ -44,7 +44,7 @@ export class TextDetector {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const el = entry.target as HTMLElement;
-          if (!this.processedElements.has(el)) {
+          if (!this.tracker.isProcessed(el)) {
             targets.push(el);
           }
           this.intersectionObserver?.unobserve(el);
@@ -106,8 +106,6 @@ export class TextDetector {
     this.mutationObserver = null;
     this.intersectionObserver?.disconnect();
     this.intersectionObserver = null;
-    this.processedElements = new WeakSet();
-    this.processedTexts = new WeakMap();
     this.pendingNodes.clear();
     this.pendingCharDataNodes.clear();
     this.scheduled = false;
@@ -148,8 +146,7 @@ export class TextDetector {
     const currentText = element.innerText?.trim() || '';
     if (!currentText || !isJapanese(currentText)) return;
 
-    const previousText = this.processedTexts.get(element);
-    if (previousText === currentText) return;
+    if (this.tracker.isProcessedWithSameText(element, currentText)) return;
 
     this.scan(element);
   }
@@ -165,10 +162,9 @@ export class TextDetector {
       const blockParent = this.findBlockParent(textNode);
       if (!blockParent) return;
 
-      if (this.processedElements.has(blockParent)) {
+      if (this.tracker.isProcessed(blockParent)) {
         const currentText = blockParent.innerText?.trim() || '';
-        const prevText = this.processedTexts.get(blockParent);
-        if (prevText === currentText) return;
+        if (this.tracker.isProcessedWithSameText(blockParent, currentText)) return;
       }
 
       if (!blockElements.has(blockParent)) {
@@ -180,8 +176,7 @@ export class TextDetector {
     for (const [element, textNodes] of blockElements) {
       const text = textNodes.map((n) => n.textContent?.trim()).filter(Boolean).join('');
       if (text && japaneseRatio(text) > 0.1) {
-        this.processedElements.add(element);
-        this.processedTexts.set(element, text);
+        this.tracker.markProcessed(element, text);
         blocks.push({ element, textNodes, text });
       }
     }

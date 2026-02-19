@@ -1,22 +1,29 @@
 import type { UserSettings } from '@/types';
 import type { DetectedBlock } from './text-detector';
+import { ProcessedTracker } from '@/content/shared/processed-tracker';
 import { MorphologicalAnalyzer } from '@/core/analyzer/morphological';
-import { escapeHtml } from '@/content/shared/dom-utils';
+import { createRubyClone } from '@/content/shared/renderers/ruby-injector';
+
+const PROCESSED_ATTR = 'data-jp-processed';
+const TRANSLATION_ATTR = 'data-jp-translation';
 
 /**
  * Full furigana mode: injects furigana (ruby annotations) into all
  * Japanese text on the page. No translation — just reading aids.
- * Processes in chunks using requestIdleCallback to avoid blocking.
+ *
+ * Uses createRubyClone for non-destructive injection: the original
+ * element is hidden and a ruby-annotated clone is inserted after it.
+ * Cleanup restores originals by removing clones and unhiding.
  */
 export class FuriganaInjector {
   private settings: UserSettings;
   private analyzer: MorphologicalAnalyzer;
-  private processedNodes = new WeakSet<Node>();
-  private injectedSpans: HTMLSpanElement[] = [];
+  private tracker: ProcessedTracker;
 
   constructor(settings: UserSettings) {
     this.settings = settings;
     this.analyzer = new MorphologicalAnalyzer();
+    this.tracker = new ProcessedTracker(PROCESSED_ATTR, TRANSLATION_ATTR);
   }
 
   async init(): Promise<void> {
@@ -32,16 +39,14 @@ export class FuriganaInjector {
       await this.init();
     }
 
-    // Process in chunks of 100 nodes
-    const CHUNK_SIZE = 100;
-    const allNodes = blocks.flatMap((b) => b.textNodes);
-
-    for (let i = 0; i < allNodes.length; i += CHUNK_SIZE) {
-      const chunk = allNodes.slice(i, i + CHUNK_SIZE);
-      await this.processChunk(chunk);
+    // Process in chunks to avoid blocking
+    const CHUNK_SIZE = 10;
+    for (let i = 0; i < blocks.length; i += CHUNK_SIZE) {
+      const chunk = blocks.slice(i, i + CHUNK_SIZE);
+      await Promise.all(chunk.map((block) => this.processBlock(block)));
 
       // Yield to main thread
-      if (i + CHUNK_SIZE < allNodes.length) {
+      if (i + CHUNK_SIZE < blocks.length) {
         await new Promise<void>((resolve) => {
           if ('requestIdleCallback' in window) {
             requestIdleCallback(() => resolve());
@@ -53,48 +58,32 @@ export class FuriganaInjector {
     }
   }
 
-  private async processChunk(textNodes: Text[]): Promise<void> {
-    for (const textNode of textNodes) {
-      if (this.processedNodes.has(textNode)) continue;
-      this.processedNodes.add(textNode);
+  private async processBlock(block: DetectedBlock): Promise<void> {
+    const el = block.element;
+    if (this.tracker.isProcessed(el)) return;
+    this.tracker.markProcessed(el, block.text);
 
-      const text = textNode.textContent?.trim();
-      if (!text) continue;
+    try {
+      const tokens = await this.analyzer.analyze(block.text);
+      const hasKanjiTokens = tokens.some((t) => t.isKanji && t.reading !== t.surface);
+      if (!hasKanjiTokens) return;
 
-      try {
-        const tokens = await this.analyzer.analyze(text);
-        const hasKanjiTokens = tokens.some((t) => t.isKanji && t.reading !== t.surface);
-        if (!hasKanjiTokens) continue;
+      if (!el.isConnected) return;
 
-        const span = document.createElement('span');
-        span.setAttribute('data-jp-processed', 'true');
-        span.style.lineHeight = '2.3em';
-
-        let html = '';
-        for (const token of tokens) {
-          if (token.isKanji && token.reading !== token.surface) {
-            html += `<ruby>${escapeHtml(token.surface)}<rt>${escapeHtml(token.reading)}</rt></ruby>`;
-          } else {
-            html += escapeHtml(token.surface);
-          }
-        }
-
-        span.innerHTML = html;
-        textNode.parentNode?.replaceChild(span, textNode);
-        this.injectedSpans.push(span);
-      } catch {
-        // Skip nodes that fail analysis
-      }
+      // Create a ruby-annotated clone and insert after the original
+      const clone = createRubyClone(el, tokens, {
+        translationAttr: TRANSLATION_ATTR,
+      });
+      el.insertAdjacentElement('afterend', clone);
+      this.tracker.trackInjected(clone);
+      el.classList.add('jp-furigana-hidden');
+    } catch {
+      // Allow retry on next detection cycle
+      this.tracker.unmarkProcessed(el);
     }
   }
 
   cleanup(): void {
-    // Restore original text nodes
-    for (const span of this.injectedSpans) {
-      const text = document.createTextNode(span.textContent || '');
-      span.parentNode?.replaceChild(text, span);
-    }
-    this.injectedSpans = [];
-    this.processedNodes = new WeakSet();
+    this.tracker.cleanup();
   }
 }

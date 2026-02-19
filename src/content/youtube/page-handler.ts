@@ -1,5 +1,6 @@
 import type { UserSettings, TranslationResult, WebpageMode } from '@/types';
 import type { StatusIndicator } from '@/content/shared/status-indicator';
+import { needsRenderRestart } from '@/content/handlers/types';
 import type { SiteHandler } from '@/content/handlers/types';
 import type { SelectorRoute } from '@/content/shared/batched-observer';
 import type { YTElementCategory } from './utils';
@@ -188,13 +189,7 @@ export class YouTubePageHandler implements SiteHandler {
     const prev = this.settings;
     this.settings = settings;
 
-    const needsRestart =
-      settings.webpageMode !== prev.webpageMode ||
-      settings.showFurigana !== prev.showFurigana ||
-      settings.showTranslation !== prev.showTranslation ||
-      settings.showRomaji !== prev.showRomaji;
-
-    if (needsRestart) {
+    if (needsRenderRestart(prev, settings)) {
       this.stop();
       if (settings.webpageMode !== 'off') {
         this.start();

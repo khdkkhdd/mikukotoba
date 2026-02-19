@@ -1,0 +1,11 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@jp-helper/shared": ["../shared/src/index.ts"],
+      "@jp-helper/shared/*": ["../shared/src/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "../shared/src/**/*.ts"]
+}

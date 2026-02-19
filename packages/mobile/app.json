@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "JP Helper",
+    "slug": "jp-helper-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "jp-helper",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F5F2EE"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.jphelper.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F5F2EE"
+      },
+      "package": "com.jphelper.mobile"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite"
+    ]
+  }
+}

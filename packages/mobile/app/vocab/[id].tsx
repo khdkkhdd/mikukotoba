@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { useDatabase } from '../../src/components/DatabaseContext';
 import { useVocabStore } from '../../src/stores/vocab-store';
 import { getEntryById } from '../../src/db';
-import type { VocabEntry } from '@jp-helper/shared';
+import type { VocabEntry } from '@mikukotoba/shared';
 import { colors, spacing, fontSize } from '../../src/components/theme';
+import { markVocabDirty } from '../../src/services/sync-manager';
 
 export default function VocabDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -56,6 +57,7 @@ export default function VocabDetailScreen() {
       timestamp: Date.now(),
     };
     await updateEntry(database, updated);
+    markVocabDirty(updated.dateAdded);
     setEntry(updated);
     setIsEditing(false);
   };
@@ -68,6 +70,7 @@ export default function VocabDetailScreen() {
         style: 'destructive',
         onPress: async () => {
           await removeEntry(database, entry.id);
+          markVocabDirty(entry.dateAdded);
           router.back();
         },
       },

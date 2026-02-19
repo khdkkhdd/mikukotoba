@@ -484,7 +484,7 @@ function setupEventListeners(): void {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'jp-helper-glossary.csv';
+    a.download = 'mikukotoba-glossary.csv';
     a.click();
     URL.revokeObjectURL(url);
   });

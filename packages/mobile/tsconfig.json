@@ -3,8 +3,8 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@jp-helper/shared": ["../shared/src/index.ts"],
-      "@jp-helper/shared/*": ["../shared/src/*"]
+      "@mikukotoba/shared": ["../shared/src/index.ts"],
+      "@mikukotoba/shared/*": ["../shared/src/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "../shared/src/**/*.ts"]

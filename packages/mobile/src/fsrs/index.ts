@@ -4,7 +4,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 const params = generatorParameters();
 const scheduler = fsrs(params);
 
-export { Rating, State };
+export { Rating, State, scheduler };
 export type { Card, Grade };
 
 function rowToCard(row: Record<string, unknown>): Card {
@@ -16,7 +16,7 @@ function rowToCard(row: Record<string, unknown>): Card {
     scheduled_days: row.scheduled_days as number,
     reps: row.reps as number,
     lapses: row.lapses as number,
-    learning_steps: 0,
+    learning_steps: (row.learning_steps as number) ?? 0,
     state: row.state as State,
     last_review: row.last_review ? new Date(row.last_review as string) : undefined,
   };
@@ -32,16 +32,59 @@ export async function getOrCreateCard(db: SQLiteDatabase, vocabId: string): Prom
     return rowToCard(row);
   }
 
-  // 새 카드 생성
   const card = createEmptyCard();
 
   await db.runAsync(
-    `INSERT INTO card_state (vocab_id, state, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, last_review)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [vocabId, card.state, card.due.toISOString(), 0, 0, 0, 0, 0, 0, null]
+    `INSERT INTO card_state (vocab_id, state, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, last_review, learning_steps)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [vocabId, card.state, card.due.toISOString(), card.stability, card.difficulty, card.elapsed_days, card.scheduled_days, card.reps, card.lapses, null, card.learning_steps]
   );
 
   return card;
+}
+
+// 순수 계산 — DB 접근 없음
+export function computeReview(card: Card, grade: Grade, now?: Date) {
+  const reviewTime = now ?? new Date();
+  const allOptions = scheduler.repeat(card, reviewTime);
+  return { nextCard: allOptions[grade].card, allOptions };
+}
+
+// 4개 grade별 간격 미리보기
+export function getSchedulingPreview(card: Card, now?: Date): { grade: Grade; interval: string }[] {
+  const reviewTime = now ?? new Date();
+  const allOptions = scheduler.repeat(card, reviewTime);
+  const grades: Grade[] = [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy];
+
+  return grades.map((grade) => {
+    const next = allOptions[grade].card;
+    return {
+      grade,
+      interval: formatInterval(next.due, reviewTime),
+    };
+  });
+}
+
+// 사람이 읽기 좋은 간격 포맷
+export function formatInterval(due: Date, now: Date): string {
+  const diffMs = due.getTime() - now.getTime();
+  if (diffMs < 0) return '<1m';
+
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return '<1m';
+  if (minutes < 60) return `${minutes}m`;
+
+  const hours = Math.round(diffMs / 3_600_000);
+  if (hours < 24) return `${hours}h`;
+
+  const days = Math.round(diffMs / 86_400_000);
+  if (days < 30) return `${days}d`;
+
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months}mo`;
+
+  const years = Math.round(days / 365);
+  return `${years}y`;
 }
 
 export async function reviewCard(
@@ -51,13 +94,12 @@ export async function reviewCard(
 ): Promise<Card> {
   const card = await getOrCreateCard(db, vocabId);
   const now = new Date();
-  const result = scheduler.repeat(card, now);
-  const next = result[grade].card;
+  const { nextCard: next } = computeReview(card, grade, now);
 
   await db.runAsync(
     `UPDATE card_state SET
       state = ?, due = ?, stability = ?, difficulty = ?,
-      elapsed_days = ?, scheduled_days = ?, reps = ?, lapses = ?, last_review = ?
+      elapsed_days = ?, scheduled_days = ?, reps = ?, lapses = ?, last_review = ?, learning_steps = ?
      WHERE vocab_id = ?`,
     [
       next.state,
@@ -69,17 +111,51 @@ export async function reviewCard(
       next.reps,
       next.lapses,
       now.toISOString(),
+      next.learning_steps,
       vocabId,
     ]
   );
 
-  // 학습 기록 저장
   await db.runAsync(
     'INSERT INTO review_log (vocab_id, rating, reviewed_at) VALUES (?, ?, ?)',
     [vocabId, grade, now.toISOString()]
   );
 
   return next;
+}
+
+// 카드 상태 저장 + review log 기록 — 세션 엔진에서 사용
+// INSERT OR REPLACE: 새 카드(card_state 미존재)도 처리
+export async function saveCardState(
+  db: SQLiteDatabase,
+  vocabId: string,
+  card: Card,
+  reviewedAt: Date,
+  grade: Grade
+): Promise<void> {
+  await db.runAsync(
+    `INSERT OR REPLACE INTO card_state
+      (vocab_id, state, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, last_review, learning_steps)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      vocabId,
+      card.state,
+      card.due.toISOString(),
+      card.stability,
+      card.difficulty,
+      card.elapsed_days,
+      card.scheduled_days,
+      card.reps,
+      card.lapses,
+      reviewedAt.toISOString(),
+      card.learning_steps,
+    ]
+  );
+
+  await db.runAsync(
+    'INSERT INTO review_log (vocab_id, rating, reviewed_at) VALUES (?, ?, ?)',
+    [vocabId, grade, reviewedAt.toISOString()]
+  );
 }
 
 export async function getDueCards(db: SQLiteDatabase, limit?: number): Promise<string[]> {

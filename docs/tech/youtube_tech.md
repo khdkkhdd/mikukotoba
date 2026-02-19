@@ -146,7 +146,7 @@ document.querySelector('video').textTracks
 
 ```
 enableCaptions('ja')
-  → CustomEvent 'jp-helper-enable-captions' 디스패치
+  → CustomEvent 'mikukotoba-enable-captions' 디스패치
   → caption-bridge.ts: player.loadModule('captions')
   → player.setOption('captions', 'track', jaTrack)
   → 1500ms 대기 (YouTube가 TextTrack 데이터 로드)
@@ -168,8 +168,8 @@ enableCaptions('ja')
 **데이터 가져오기:**
 ```
 bridgeFetch(url)
-  → MAIN world 브릿지에 'jp-helper-fetch-url' 이벤트 전송
-  → 브릿지: 동일 출처 fetch → 'jp-helper-fetch-response'로 응답
+  → MAIN world 브릿지에 'mikukotoba-fetch-url' 이벤트 전송
+  → 브릿지: 동일 출처 fetch → 'mikukotoba-fetch-response'로 응답
   → 타임아웃(3000ms) → 직접 fetch 시도 (CORS 제한 가능)
 ```
 
@@ -243,17 +243,17 @@ Content script ↔ MAIN world 간 `CustomEvent`로 통신:
 
 | 이벤트 | 방향 | 용도 |
 |--------|------|------|
-| `jp-helper-get-tracks` | Content → MAIN | 캡션 트랙 목록 요청 |
-| `jp-helper-tracks-response` | MAIN → Content | 캡션 트랙 목록 응답 (JSON) |
-| `jp-helper-enable-captions` | Content → MAIN | 캡션 활성화 요청 (lang 전달) |
-| `jp-helper-captions-enabled` | MAIN → Content | 활성화 결과 ({success, info}) |
-| `jp-helper-fetch-url` | Content → MAIN | URL 가져오기 요청 ({url, id}) |
-| `jp-helper-fetch-response` | MAIN → Content | 가져오기 결과 ({id, status, text}) |
+| `mikukotoba-get-tracks` | Content → MAIN | 캡션 트랙 목록 요청 |
+| `mikukotoba-tracks-response` | MAIN → Content | 캡션 트랙 목록 응답 (JSON) |
+| `mikukotoba-enable-captions` | Content → MAIN | 캡션 활성화 요청 (lang 전달) |
+| `mikukotoba-captions-enabled` | MAIN → Content | 활성화 결과 ({success, info}) |
+| `mikukotoba-fetch-url` | Content → MAIN | URL 가져오기 요청 ({url, id}) |
+| `mikukotoba-fetch-response` | MAIN → Content | 가져오기 결과 ({id, status, text}) |
 
 ### 5.3 캡션 트랙 추출 로직
 
 ```
-jp-helper-get-tracks 수신
+mikukotoba-get-tracks 수신
   → [1] player.getPlayerResponse().captions.captionTracks
   → [2] 실패 시: window.ytInitialPlayerResponse.captions.captionTracks
   → tracks 배열 JSON 직렬화하여 응답
@@ -262,7 +262,7 @@ jp-helper-get-tracks 수신
 ### 5.4 캡션 활성화 로직
 
 ```
-jp-helper-enable-captions 수신 (lang='ja')
+mikukotoba-enable-captions 수신 (lang='ja')
   → player.loadModule('captions')           // 캡션 모듈 로드
   → player.getOption('captions', 'tracklist') // 사용 가능 트랙 조회
   → manual ja 트랙 우선, 없으면 asr ja 트랙
@@ -274,16 +274,16 @@ jp-helper-enable-captions 수신 (lang='ja')
 TimedText API URL에는 서명(sig) 파라미터가 포함되어 있어, Content script에서의 CORS 요청이 차단될 수 있다. MAIN world에서는 YouTube와 동일 출처이므로 fetch가 가능하다.
 
 ```
-jp-helper-fetch-url 수신 ({url, id})
+mikukotoba-fetch-url 수신 ({url, id})
   → fetch(url)
-  → 결과를 jp-helper-fetch-response로 응답 ({id, status, text})
+  → 결과를 mikukotoba-fetch-response로 응답 ({id, status, text})
 ```
 
 `id` 필드로 요청-응답을 매칭하여, 여러 동시 요청이 섞이지 않도록 한다.
 
 ### 5.6 개선 방향
 
-1. **구조화된 메시지 프로토콜**: 현재 이벤트명이 기능별로 개별 정의. 단일 채널(`jp-helper-bridge`)에 `{ type, payload }` 형식으로 통합하면 확장성 향상.
+1. **구조화된 메시지 프로토콜**: 현재 이벤트명이 기능별로 개별 정의. 단일 채널(`mikukotoba-bridge`)에 `{ type, payload }` 형식으로 통합하면 확장성 향상.
 
 2. **에러 전파 개선**: 현재 브릿지 에러는 빈 응답 또는 타임아웃으로만 처리. 명시적 에러 메시지를 content script에 전달하면 디버깅이 용이.
 
@@ -295,7 +295,7 @@ jp-helper-fetch-url 수신 ({url, id})
 
 ```
 .html5-video-player
-  └── #jp-helper-overlay-container
+  └── #mikukotoba-overlay-container
         └── #shadow-root (open)
               ├── <style> (동적 생성, 설정 반영)
               └── .jp-overlay
@@ -318,7 +318,7 @@ jp-helper-fetch-url 수신 ({url, id})
 .caption-window { display: none !important; }
 ```
 
-`<style id="jp-helper-hide-yt-captions">`를 `document.head`에 삽입. `unmount()` 시 제거하여 기본 자막 복원.
+`<style id="mikukotoba-hide-yt-captions">`를 `document.head`에 삽입. `unmount()` 시 제거하여 기본 자막 복원.
 
 ### 6.4 표시 구성
 

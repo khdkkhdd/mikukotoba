@@ -1,12 +1,16 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { VocabEntry, DrivePartitionContent, DriveSyncMeta, SyncResult } from '@jp-helper/shared';
+import type { VocabEntry, DrivePartitionContent, DriveSyncMeta, SyncResult, DriveFsrsState, DriveReviewLogState } from '@mikukotoba/shared';
 import {
   DriveAPI,
   mergeEntries,
   cleanTombstones,
+  mergeFsrsStates,
+  mergeReviewLogs,
   drivePartitionName,
   DRIVE_META_FILE,
-} from '@jp-helper/shared';
+  DRIVE_FSRS_FILE,
+  DRIVE_REVIEW_LOG_FILE,
+} from '@mikukotoba/shared';
 import * as db from '../db';
 import { getAccessToken } from './drive-auth';
 
@@ -46,7 +50,10 @@ async function ensureDriveFileId(
 
 export async function pullFromDrive(database: SQLiteDatabase): Promise<SyncResult> {
   const token = await getAccessToken();
-  if (!token) return { changed: false, pulled: 0, pushed: 0 };
+  if (!token) {
+    console.warn('[SYNC] pullFromDrive: no token, skipping');
+    return { changed: false, pulled: 0, pushed: 0 };
+  }
 
   const meta = await getLocalSyncMeta(database);
   const tombstones = await db.getTombstones(database);
@@ -60,8 +67,8 @@ export async function pullFromDrive(database: SQLiteDatabase): Promise<SyncResul
   if (remoteMetaFileId) {
     try {
       remoteMeta = await DriveAPI.getFile<DriveSyncMeta>(token, remoteMetaFileId);
-    } catch {
-      // First sync
+    } catch (e) {
+      console.error('[SYNC] failed to read remote metadata:', e);
     }
   }
 
@@ -93,10 +100,10 @@ export async function pullFromDrive(database: SQLiteDatabase): Promise<SyncResul
           const merged = mergeEntries(localEntries, remote.entries, currentTombstones);
           await db.upsertEntries(database, merged);
           meta.partitionVersions[date] = remoteVersion;
-          pulled++;
+          pulled += merged.length;
           changed = true;
-        } catch {
-          // Skip on error
+        } catch (e) {
+          console.error('[SYNC] failed to pull partition', date, e);
         }
       }
     }
@@ -113,7 +120,10 @@ export async function pullFromDrive(database: SQLiteDatabase): Promise<SyncResul
 
 export async function pushToDrive(database: SQLiteDatabase, dates: string[]): Promise<number> {
   const token = await getAccessToken();
-  if (!token) return 0;
+  if (!token) {
+    console.warn('[SYNC] pushToDrive: no token, skipping');
+    return 0;
+  }
 
   const meta = await getLocalSyncMeta(database);
   let pushed = 0;
@@ -134,7 +144,7 @@ export async function pushToDrive(database: SQLiteDatabase, dates: string[]): Pr
     }
 
     meta.partitionVersions[date] = version;
-    pushed++;
+    pushed += entries.length;
   }
 
   // Update remote metadata
@@ -154,4 +164,141 @@ export async function pushToDrive(database: SQLiteDatabase, dates: string[]): Pr
 
   await saveLocalSyncMeta(database, meta);
   return pushed;
+}
+
+export async function pullFsrsState(database: SQLiteDatabase): Promise<boolean> {
+  const token = await getAccessToken();
+  if (!token) return false;
+
+  const meta = await getLocalSyncMeta(database);
+
+  const fileId = await ensureDriveFileId(token, meta, DRIVE_FSRS_FILE);
+  if (!fileId) {
+    await saveLocalSyncMeta(database, meta);
+    return false;
+  }
+
+  let remote: DriveFsrsState;
+  try {
+    remote = await DriveAPI.getFile<DriveFsrsState>(token, fileId);
+  } catch {
+    return false;
+  }
+
+  // 로컬 버전 비교
+  const localVersionStr = await db.getSyncMeta(database, 'fsrs_version');
+  const localVersion = localVersionStr ? Number(localVersionStr) : 0;
+
+  if (remote.version <= localVersion) {
+    return false;
+  }
+
+  // 머지
+  const localStates = await db.getAllCardStates(database);
+  const localFsrs: DriveFsrsState = { cardStates: localStates, version: localVersion };
+  const merged = mergeFsrsStates(localFsrs, remote);
+
+  await db.upsertCardStates(database, merged.cardStates);
+  await db.setSyncMeta(database, 'fsrs_version', String(merged.version));
+  await saveLocalSyncMeta(database, meta);
+
+  return true;
+}
+
+export async function pushFsrsState(database: SQLiteDatabase): Promise<void> {
+  const token = await getAccessToken();
+  if (!token) return;
+
+  const meta = await getLocalSyncMeta(database);
+  const cardStates = await db.getAllCardStates(database);
+
+  const version = Date.now();
+  const content: DriveFsrsState = { cardStates, version };
+
+  const fileId = await ensureDriveFileId(token, meta, DRIVE_FSRS_FILE);
+  if (fileId) {
+    await DriveAPI.updateFile(token, fileId, content);
+  } else {
+    const newId = await DriveAPI.createFile(token, DRIVE_FSRS_FILE, content);
+    meta.driveFileIds[DRIVE_FSRS_FILE] = newId;
+  }
+
+  await db.setSyncMeta(database, 'fsrs_version', String(version));
+  await saveLocalSyncMeta(database, meta);
+}
+
+export async function pushReviewLogs(database: SQLiteDatabase): Promise<void> {
+  const token = await getAccessToken();
+  if (!token) return;
+
+  const meta = await getLocalSyncMeta(database);
+  const localLogs = await db.getAllReviewLogs(database);
+
+  const localVersionStr = await db.getSyncMeta(database, 'review_log_version');
+  const localVersion = localVersionStr ? Number(localVersionStr) : 0;
+  let localState: DriveReviewLogState = { logs: localLogs, version: localVersion };
+
+  // merge-before-push: 리모트 파일이 있으면 머지
+  const fileId = await ensureDriveFileId(token, meta, DRIVE_REVIEW_LOG_FILE);
+  if (fileId) {
+    try {
+      const remote = await DriveAPI.getFile<DriveReviewLogState>(token, fileId);
+      const merged = mergeReviewLogs(localState, remote);
+      localState = merged;
+      // 머지된 결과를 로컬 DB에도 반영
+      await db.replaceAllReviewLogs(database, merged.logs);
+    } catch {
+      // 리모트 읽기 실패 → 로컬만 push
+    }
+  }
+
+  const version = Date.now();
+  const content: DriveReviewLogState = { logs: localState.logs, version };
+
+  if (fileId) {
+    await DriveAPI.updateFile(token, fileId, content);
+  } else {
+    const newId = await DriveAPI.createFile(token, DRIVE_REVIEW_LOG_FILE, content);
+    meta.driveFileIds[DRIVE_REVIEW_LOG_FILE] = newId;
+  }
+
+  await db.setSyncMeta(database, 'review_log_version', String(version));
+  await saveLocalSyncMeta(database, meta);
+}
+
+export async function pullReviewLogs(database: SQLiteDatabase): Promise<boolean> {
+  const token = await getAccessToken();
+  if (!token) return false;
+
+  const meta = await getLocalSyncMeta(database);
+
+  const fileId = await ensureDriveFileId(token, meta, DRIVE_REVIEW_LOG_FILE);
+  if (!fileId) {
+    await saveLocalSyncMeta(database, meta);
+    return false;
+  }
+
+  let remote: DriveReviewLogState;
+  try {
+    remote = await DriveAPI.getFile<DriveReviewLogState>(token, fileId);
+  } catch {
+    return false;
+  }
+
+  const localVersionStr = await db.getSyncMeta(database, 'review_log_version');
+  const localVersion = localVersionStr ? Number(localVersionStr) : 0;
+
+  if (remote.version <= localVersion) {
+    return false;
+  }
+
+  const localLogs = await db.getAllReviewLogs(database);
+  const localState: DriveReviewLogState = { logs: localLogs, version: localVersion };
+  const merged = mergeReviewLogs(localState, remote);
+
+  await db.replaceAllReviewLogs(database, merged.logs);
+  await db.setSyncMeta(database, 'review_log_version', String(merged.version));
+  await saveLocalSyncMeta(database, meta);
+
+  return true;
 }

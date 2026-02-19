@@ -1,10 +1,10 @@
 /**
  * Lightweight structured logger for debugging the translation pipeline.
- * Filter by "[JP Helper]" in the browser console to trace the full flow.
+ * Filter by "[ミク言葉]" in the browser console to trace the full flow.
  *
  * Usage:
  *   const log = createLogger('Video');
- *   log.info('New video detected', videoId);  // [JP Helper][Video] New video detected abc123 +0ms
+ *   log.info('New video detected', videoId);  // [ミク言葉][Video] New video detected abc123 +0ms
  */
 
 let LOG_ENABLED = false;
@@ -22,7 +22,7 @@ export interface Logger {
 
 export function createLogger(tag: string): Logger {
   let lastTime = Date.now();
-  const prefix = `[JP Helper][${tag}]`;
+  const prefix = `[ミク言葉][${tag}]`;
 
   function elapsed(): string {
     const now = Date.now();

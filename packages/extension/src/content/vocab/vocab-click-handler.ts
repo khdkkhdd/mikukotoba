@@ -43,7 +43,7 @@ export async function handleWordClick(
       await chrome.runtime.sendMessage({ type: 'VOCAB_SAVE', payload: entry });
     });
   } catch (e) {
-    console.error('[JP Helper] Vocab click handler failed:', e);
+    console.error('[ミク言葉] Vocab click handler failed:', e);
     removeVocabModal();
   }
 }

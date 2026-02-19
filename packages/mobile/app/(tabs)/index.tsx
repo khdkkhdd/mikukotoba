@@ -30,7 +30,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>JP Helper</Text>
+        <Text style={styles.title}>ミク言葉</Text>
         <Text style={styles.subtitle}>일본어 단어 학습</Text>
       </View>
 
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
     padding: spacing.lg,
-    paddingTop: 60,
+    paddingTop: 80,
   },
   header: {
     marginBottom: spacing.xl,

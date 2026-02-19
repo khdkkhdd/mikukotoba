@@ -95,7 +95,7 @@ display === 'block' || 'flex' || 'grid' || 'list-item' || 'table-cell'
 ```
 
 **제외 대상:**
-- `data-jp-translation` 속성이 있는 요소 (JP Helper 삽입 요소)
+- `data-jp-translation` 속성이 있는 요소 (ミク言葉 삽입 요소)
 - `contenteditable`, `role="textbox"`, `role="combobox"` (편집 영역)
 
 ### 2.4 중복 방지
@@ -161,7 +161,7 @@ HoverPopup
 ```
 elementFromPoint(x, y)
   → 상위로 탐색 (current.parentElement)
-  → data-jp-translation, data-jp-processed → skip (JP Helper 요소)
+  → data-jp-translation, data-jp-processed → skip (ミク言葉 요소)
   → display가 block/flex/grid/list-item/table-cell?
     → text = innerText.trim()
     → text.length <= 500 && isJapanese(text)
@@ -335,15 +335,15 @@ InlineTranslator와 달리, `injectedSpans` 배열을 통해 모든 span의 text
 ### 6.1 구조
 
 ```
-<jp-helper-status>
+<mikukotoba-status>
   #shadow-root (closed)
     <style>...</style>
     <div class="pill">
       <span class="dot idle"></span>
-      <span class="label">JP Helper</span>
+      <span class="label">ミク言葉</span>
       <span class="counts"></span>
     </div>
-</jp-helper-status>
+</mikukotoba-status>
 ```
 
 Custom Element + Shadow DOM (closed)으로 호스트 페이지 CSS와 완전 격리.

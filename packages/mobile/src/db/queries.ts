@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { VocabEntry } from '@jp-helper/shared';
+import type { VocabEntry, DriveCardState, DriveReviewLogEntry } from '@mikukotoba/shared';
+import { createEmptyCard, type Card, State } from 'ts-fsrs';
 
 // VocabEntry ↔ DB row 변환
 function entryToRow(e: VocabEntry) {
@@ -100,6 +101,44 @@ export async function getTotalCount(db: SQLiteDatabase): Promise<number> {
   return result?.count ?? 0;
 }
 
+// 오늘 처음 학습한 새 카드 수 (일일 한도 추적용)
+export async function getTodayNewCardCount(db: SQLiteDatabase): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10);
+  const result = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM (
+       SELECT vocab_id
+       FROM review_log
+       GROUP BY vocab_id
+       HAVING MIN(reviewed_at) >= ?
+     )`,
+    [`${today}T00:00:00.000Z`]
+  );
+  return result?.count ?? 0;
+}
+
+// Review log 동기화
+export async function getAllReviewLogs(db: SQLiteDatabase): Promise<DriveReviewLogEntry[]> {
+  return db.getAllAsync<DriveReviewLogEntry>(
+    'SELECT vocab_id, rating, reviewed_at FROM review_log ORDER BY reviewed_at ASC'
+  );
+}
+
+export async function replaceAllReviewLogs(
+  db: SQLiteDatabase,
+  logs: DriveReviewLogEntry[]
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM review_log');
+    for (const log of logs) {
+      await db.runAsync(
+        `INSERT INTO review_log (vocab_id, rating, reviewed_at)
+         SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM vocab WHERE id = ?)`,
+        [log.vocab_id, log.rating, log.reviewed_at, log.vocab_id]
+      );
+    }
+  });
+}
+
 // Tombstone 관련
 export async function addTombstone(db: SQLiteDatabase, entryId: string): Promise<void> {
   await db.runAsync(
@@ -135,4 +174,293 @@ export async function setSyncMeta(db: SQLiteDatabase, key: string, value: string
     'INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)',
     [key, value]
   );
+}
+
+// FSRS card_state 전체 조회
+export async function getAllCardStates(db: SQLiteDatabase): Promise<Record<string, DriveCardState>> {
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    'SELECT * FROM card_state'
+  );
+  const result: Record<string, DriveCardState> = {};
+  for (const row of rows) {
+    result[row.vocab_id as string] = {
+      state: row.state as number,
+      due: row.due as string,
+      stability: row.stability as number,
+      difficulty: row.difficulty as number,
+      elapsed_days: row.elapsed_days as number,
+      scheduled_days: row.scheduled_days as number,
+      reps: row.reps as number,
+      lapses: row.lapses as number,
+      last_review: (row.last_review as string) ?? null,
+      learning_steps: (row.learning_steps as number) ?? 0,
+    };
+  }
+  return result;
+}
+
+// FSRS card_state 배치 upsert
+export async function upsertCardStates(
+  db: SQLiteDatabase,
+  states: Record<string, DriveCardState>
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    for (const [vocabId, card] of Object.entries(states)) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO card_state (vocab_id, state, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, last_review, learning_steps)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          vocabId,
+          card.state,
+          card.due,
+          card.stability,
+          card.difficulty,
+          card.elapsed_days,
+          card.scheduled_days,
+          card.reps,
+          card.lapses,
+          card.last_review,
+          card.learning_steps ?? 0,
+        ]
+      );
+    }
+  });
+}
+
+// SRS 초기화용: due 카드 + VocabEntry + Card 한 번에 로드
+export interface CardWithEntry {
+  entry: VocabEntry;
+  card: Card;
+}
+
+export async function getDueCardsWithEntries(db: SQLiteDatabase): Promise<CardWithEntry[]> {
+  const now = new Date().toISOString();
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT v.*, cs.state as cs_state, cs.due as cs_due, cs.stability, cs.difficulty,
+            cs.elapsed_days, cs.scheduled_days, cs.reps, cs.lapses, cs.last_review, cs.learning_steps
+     FROM card_state cs
+     JOIN vocab v ON v.id = cs.vocab_id
+     WHERE cs.due <= ?
+     ORDER BY cs.due ASC`,
+    [now]
+  );
+  return rows.map(rowToCardWithEntry);
+}
+
+// SRS 초기화용: 새 카드 + VocabEntry 한 번에 로드
+export async function getNewCardsWithEntries(db: SQLiteDatabase, limit: number): Promise<CardWithEntry[]> {
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT v.*, NULL as cs_state, NULL as cs_due, NULL as stability, NULL as difficulty,
+            NULL as elapsed_days, NULL as scheduled_days, NULL as reps, NULL as lapses,
+            NULL as last_review, NULL as learning_steps
+     FROM vocab v
+     LEFT JOIN card_state cs ON v.id = cs.vocab_id
+     WHERE cs.vocab_id IS NULL
+     ORDER BY v.timestamp ASC LIMIT ?`,
+    [limit]
+  );
+  return rows.map((row) => ({
+    entry: rowToEntry(row),
+    card: newEmptyCard(),
+  }));
+}
+
+// 릴레이용: 날짜 범위 랜덤 조회
+export async function getRandomEntriesByDateRange(
+  db: SQLiteDatabase,
+  startDate: string,
+  endDate: string,
+  limit: number
+): Promise<VocabEntry[]> {
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM vocab WHERE date_added BETWEEN ? AND ? ORDER BY RANDOM() LIMIT ?`,
+    [startDate, endDate, limit]
+  );
+  return rows.map(rowToEntry);
+}
+
+// 릴레이용: 전체 날짜 범위
+export async function getDateRange(db: SQLiteDatabase): Promise<{ min: string; max: string } | null> {
+  const result = await db.getFirstAsync<{ min_date: string | null; max_date: string | null }>(
+    'SELECT MIN(date_added) as min_date, MAX(date_added) as max_date FROM vocab'
+  );
+  if (!result?.min_date || !result?.max_date) return null;
+  return { min: result.min_date, max: result.max_date };
+}
+
+// 릴레이용: 날짜 범위 내 단어 수
+export async function getCountByDateRange(
+  db: SQLiteDatabase,
+  startDate: string,
+  endDate: string
+): Promise<number> {
+  const result = await db.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM vocab WHERE date_added BETWEEN ? AND ?',
+    [startDate, endDate]
+  );
+  return result?.count ?? 0;
+}
+
+// --- 통계 쿼리 ---
+
+/** 일별 학습 집계 (날짜, 총 카드 수, 등급별 수) */
+export interface DailyStats {
+  date: string;
+  total: number;
+  again: number;
+  hard: number;
+  good: number;
+  easy: number;
+}
+
+export async function getDailyReviewStats(
+  db: SQLiteDatabase,
+  startDate: string,
+  endDate: string
+): Promise<DailyStats[]> {
+  return db.getAllAsync<DailyStats>(
+    `SELECT
+       DATE(reviewed_at) as date,
+       COUNT(*) as total,
+       SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as again,
+       SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as hard,
+       SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as good,
+       SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as easy
+     FROM review_log
+     WHERE DATE(reviewed_at) BETWEEN ? AND ?
+     GROUP BY DATE(reviewed_at)
+     ORDER BY date ASC`,
+    [startDate, endDate]
+  );
+}
+
+/** 전체 기간 요약 통계 */
+export interface OverallStats {
+  totalReviews: number;
+  totalDays: number;
+  totalVocab: number;
+  again: number;
+  hard: number;
+  good: number;
+  easy: number;
+}
+
+export async function getOverallStats(db: SQLiteDatabase): Promise<OverallStats> {
+  const result = await db.getFirstAsync<{
+    totalReviews: number;
+    totalDays: number;
+    again: number;
+    hard: number;
+    good: number;
+    easy: number;
+  }>(
+    `SELECT
+       COUNT(*) as totalReviews,
+       COUNT(DISTINCT DATE(reviewed_at)) as totalDays,
+       SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as again,
+       SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as hard,
+       SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as good,
+       SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as easy
+     FROM review_log`
+  );
+  const vocabResult = await db.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM vocab'
+  );
+  return {
+    totalReviews: result?.totalReviews ?? 0,
+    totalDays: result?.totalDays ?? 0,
+    totalVocab: vocabResult?.count ?? 0,
+    again: result?.again ?? 0,
+    hard: result?.hard ?? 0,
+    good: result?.good ?? 0,
+    easy: result?.easy ?? 0,
+  };
+}
+
+/** 연속 학습일(스트릭) 계산 */
+export async function getStreak(db: SQLiteDatabase): Promise<{ current: number; longest: number }> {
+  const rows = await db.getAllAsync<{ date: string }>(
+    'SELECT DISTINCT DATE(reviewed_at) as date FROM review_log ORDER BY date DESC'
+  );
+
+  if (rows.length === 0) return { current: 0, longest: 0 };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const dates = rows.map((r) => r.date);
+
+  // 현재 스트릭: 오늘 또는 어제부터 연속
+  let current = 0;
+  const firstDate = dates[0];
+  if (firstDate === today || firstDate === yesterday()) {
+    current = 1;
+    for (let i = 1; i < dates.length; i++) {
+      const expected = daysBeforeDate(firstDate, i);
+      if (dates[i] === expected) {
+        current++;
+      } else {
+        break;
+      }
+    }
+  }
+
+  // 최장 스트릭
+  let longest = 0;
+  let streak = 1;
+  for (let i = 1; i < dates.length; i++) {
+    const prev = new Date(dates[i - 1]);
+    const curr = new Date(dates[i]);
+    const diff = (prev.getTime() - curr.getTime()) / (1000 * 60 * 60 * 24);
+    if (Math.round(diff) === 1) {
+      streak++;
+    } else {
+      longest = Math.max(longest, streak);
+      streak = 1;
+    }
+  }
+  longest = Math.max(longest, streak, current);
+
+  return { current, longest };
+}
+
+function yesterday(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysBeforeDate(dateStr: string, n: number): string {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** 마스터한 단어 수 (Review 상태 + stability >= 30) */
+export async function getMasteredCount(db: SQLiteDatabase): Promise<number> {
+  const result = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM card_state WHERE state = ? AND stability >= 30`,
+    [State.Review]
+  );
+  return result?.count ?? 0;
+}
+
+function rowToCardWithEntry(row: Record<string, unknown>): CardWithEntry {
+  return {
+    entry: rowToEntry(row),
+    card: {
+      due: new Date(row.cs_due as string),
+      stability: row.stability as number,
+      difficulty: row.difficulty as number,
+      elapsed_days: row.elapsed_days as number,
+      scheduled_days: row.scheduled_days as number,
+      reps: row.reps as number,
+      lapses: row.lapses as number,
+      learning_steps: (row.learning_steps as number) ?? 0,
+      state: row.cs_state as State,
+      last_review: row.last_review ? new Date(row.last_review as string) : undefined,
+    },
+  };
+}
+
+function newEmptyCard(): Card {
+  return createEmptyCard();
 }

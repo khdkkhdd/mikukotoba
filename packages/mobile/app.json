@@ -1,28 +1,28 @@
 {
   "expo": {
-    "name": "JP Helper",
-    "slug": "jp-helper-mobile",
+    "name": "ミク言葉",
+    "slug": "mikukotoba",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "jp-helper",
+    "scheme": "mikukotoba",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F5F2EE"
+      "backgroundColor": "#F2F7F7"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jphelper.mobile"
+      "bundleIdentifier": "com.mikukotoba.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F5F2EE"
+        "backgroundColor": "#F2F7F7"
       },
-      "package": "com.jphelper.mobile"
+      "package": "com.mikukotoba.app"
     },
     "plugins": [
       "expo-router",

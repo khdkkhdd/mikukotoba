@@ -4,18 +4,27 @@ import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { initDatabase } from '../src/db/schema';
 import { useVocabStore } from '../src/stores/vocab-store';
 import { DatabaseContext } from '../src/components/DatabaseContext';
+import { initSyncManager, destroySyncManager } from '../src/services/sync-manager';
+import { configureDriveAuth } from '../src/services/drive-auth';
 
 export default function RootLayout() {
   const [database, setDatabase] = useState<SQLiteDatabase | null>(null);
   const init = useVocabStore((s) => s.init);
 
   useEffect(() => {
+    configureDriveAuth('582194695290-f6rcct950bphqemdgf3mmi2ruu68nbrh.apps.googleusercontent.com');
+
     (async () => {
-      const db = await openDatabaseAsync('jp-helper.db');
+      const db = await openDatabaseAsync('mikukotoba.db');
       await initDatabase(db);
       setDatabase(db);
       await init(db);
+      initSyncManager(db);
     })();
+
+    return () => {
+      destroySyncManager();
+    };
   }, [init]);
 
   if (!database) return null;

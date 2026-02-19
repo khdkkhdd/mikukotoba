@@ -29,7 +29,7 @@ export class SubtitleOverlay {
 
     // Create container with Shadow DOM
     this.container = document.createElement('div');
-    this.container.id = 'jp-helper-overlay-container';
+    this.container.id = 'mikukotoba-overlay-container';
     this.shadowRoot = this.container.attachShadow({ mode: 'open' });
 
     // Add styles
@@ -41,7 +41,7 @@ export class SubtitleOverlay {
     this.overlay = document.createElement('div');
     this.overlay.className = 'jp-overlay';
     this.overlay.setAttribute('role', 'region');
-    this.overlay.setAttribute('aria-label', 'JP Helper subtitles');
+    this.overlay.setAttribute('aria-label', 'ミク言葉 subtitles');
     this.shadowRoot.appendChild(this.overlay);
 
     player.appendChild(this.container);
@@ -210,7 +210,7 @@ export class SubtitleOverlay {
 
   private hideYouTubeCaptions(): void {
     const style = document.createElement('style');
-    style.id = 'jp-helper-hide-yt-captions';
+    style.id = 'mikukotoba-hide-yt-captions';
     style.textContent = `
       .ytp-caption-window-container { display: none !important; }
       .caption-window { display: none !important; }
@@ -219,7 +219,7 @@ export class SubtitleOverlay {
   }
 
   private showYouTubeCaptions(): void {
-    const style = document.getElementById('jp-helper-hide-yt-captions');
+    const style = document.getElementById('mikukotoba-hide-yt-captions');
     if (style) style.remove();
   }
 

@@ -1,5 +1,8 @@
 {
-  "name": "jp-helper",
+  "name": "mikukotoba",
   "private": true,
-  "workspaces": ["packages/*"]
+  "workspaces": ["packages/*"],
+  "overrides": {
+    "react": "19.1.0"
+  }
 }

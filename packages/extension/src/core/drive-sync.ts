@@ -1,14 +1,14 @@
 import type { SyncMetadata, SyncResult, VocabEntry, VocabStorageIndex } from '@/types';
-import type { DrivePartitionContent, DriveSyncMeta } from '@jp-helper/shared';
+import type { DrivePartitionContent, DriveSyncMeta } from '@mikukotoba/shared';
 import { DriveAuth } from './drive-auth';
-import { DriveAPI } from '@jp-helper/shared';
+import { DriveAPI } from '@mikukotoba/shared';
 import {
   mergeEntries,
   cleanTombstones,
   drivePartitionName,
   DRIVE_META_FILE,
   DRIVE_INDEX_FILE,
-} from '@jp-helper/shared';
+} from '@mikukotoba/shared';
 
 const SYNC_META_KEY = 'jp_drive_sync_meta';
 const VOCAB_INDEX_KEY = 'jp_vocab_index';
@@ -186,6 +186,13 @@ export const DriveSync = {
       } else if (localVersion > remoteVersion) {
         await pushPartitionImmediate(date);
         pushed++;
+      } else if (localVersion === 0 && remoteVersion === 0) {
+        // Never synced — push if local entries exist
+        const localEntries = await getLocalEntries(date);
+        if (localEntries.length > 0) {
+          await pushPartitionImmediate(date);
+          pushed++;
+        }
       }
     }
 

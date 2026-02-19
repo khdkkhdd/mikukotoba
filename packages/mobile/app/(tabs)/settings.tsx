@@ -1,7 +1,7 @@
 import { View, Text, Pressable, StyleSheet, Switch, Alert } from 'react-native';
 import { useDatabase } from '../../src/components/DatabaseContext';
 import { useSettingsStore } from '../../src/stores/settings-store';
-import { pullFromDrive } from '../../src/services/sync';
+import { fullSync } from '../../src/services/sync-manager';
 import { signIn, signOut, isSignedIn } from '../../src/services/drive-auth';
 import { useVocabStore } from '../../src/stores/vocab-store';
 import { colors, spacing, fontSize } from '../../src/components/theme';
@@ -37,12 +37,17 @@ export default function SettingsScreen() {
   const handleSync = async () => {
     setSyncState(true);
     try {
-      const result = await pullFromDrive(database);
+      const result = await fullSync(database);
       setSyncState(false, Date.now());
-      if (result.changed) {
-        await refreshVocab(database);
-      }
-      Alert.alert('동기화 완료', `${result.pulled}개 파티션 업데이트`);
+      await refreshVocab(database);
+
+      const parts: string[] = [];
+      if (result.vocabPulled > 0) parts.push(`단어 ${result.vocabPulled}개 pull`);
+      if (result.vocabPushed > 0) parts.push(`단어 ${result.vocabPushed}개 push`);
+      if (result.fsrsPulled) parts.push('학습 진도 pull');
+      parts.push('학습 진도 push');
+
+      Alert.alert('동기화 완료', parts.join(', '));
     } catch (e) {
       setSyncState(false);
       Alert.alert('동기화 실패', String(e));
@@ -109,10 +114,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
     padding: spacing.lg,
-    paddingTop: 60,
+    paddingTop: 80,
   },
   pageTitle: {
-    fontSize: fontSize.xl,
+    fontSize: fontSize.xxl,
     fontWeight: '700',
     color: colors.text,
     marginBottom: spacing.lg,

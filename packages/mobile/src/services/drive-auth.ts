@@ -23,8 +23,8 @@ export async function signOut(): Promise<void> {
 }
 
 export async function getAccessToken(): Promise<string | null> {
-  const isSignedIn = GoogleSignin.getCurrentUser();
-  if (!isSignedIn) return null;
+  const user = GoogleSignin.getCurrentUser();
+  if (!user) return null;
 
   try {
     const tokens = await GoogleSignin.getTokens();

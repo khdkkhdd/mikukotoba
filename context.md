@@ -1,68 +1,74 @@
 # Goal
 
-JP Helper Chrome Extension 리팩토링 — Phase 1~5 전체 완료.
-코드 품질, 공유 인프라, 단어장 연동, 번역 파이프라인 고도화까지 달성.
+모바일 앱 기능 확장 및 UI 일관성 개선.
+
+- review_log Drive 동기화로 기기 간 학습 통계 통합
+- 전체 탭 UI 레이아웃 일관성 확보
 
 # Research
 
-## 아키텍처
+## 앱 구조
 
 ```
-Handler → Shared → Core (역방향 없음)
+packages/mobile/
+  app/(tabs)/_layout.tsx    # 5탭: Home, 단어, 학습, 통계, 설정 (headerShown: false)
+  app/(tabs)/index.tsx      # 홈 — paddingTop: 80
+  app/(tabs)/vocab.tsx      # 단어장 — paddingTop: 80, sticky sectionHeader bg 처리
+  app/(tabs)/study.tsx      # 학습 — paddingTop: 80
+  app/(tabs)/stats.tsx      # 통계 탭 (StatsScreen)
+  app/(tabs)/settings.tsx   # 설정 — paddingTop: 80
+  src/study/StatsScreen.tsx # 통계 — paddingTop: 80, 좌측 정렬 타이틀
+  src/study/SrsSession.tsx  # SRS 학습 (markFsrsDirty + markReviewLogDirty)
+  src/components/Calendar.tsx
+  src/components/theme.ts
+  src/db/queries.ts         # getAllReviewLogs, replaceAllReviewLogs 추가
+  src/db/schema.ts          # review_log 테이블 (vocab_id FK, rating, reviewed_at)
+  src/services/sync.ts      # pushReviewLogs (merge-before-push), pullReviewLogs
+  src/services/sync-manager.ts  # dirtyReviewLog 플래그, flush/pull/fullSync 통합
 ```
 
-- **Core** `src/core/` — translator, analyzer, cache, glossary, vocab-storage, logger
-- **Shared** `src/content/shared/` — batched-observer, processed-tracker, dom-utils, status-indicator, renderers/
-- **Handler** `src/content/{twitter,youtube,webpage}/` — 사이트별 핸들러
-- **Vocab** `src/content/vocab/` — vocab-modal, vocab-add-handler, vocab-click-handler, word-click-callback, selection-capture
+## DB 스키마
 
-## 주요 패턴
+- `review_log`: id (autoincrement), vocab_id (FK→vocab), rating, reviewed_at (ISO)
+- `card_state`: vocab_id (FK→vocab), state, due, stability, ...
 
-- **렌더링**: `createInlineBlock(result, settings, opts)`, `createRubyClone(el, tokens, opts)` — 모든 핸들러가 동일 렌더러 사용
-- **상태 관리**: `ProcessedTracker` — markProcessed/isProcessed/cleanup
-- **설정 변경**: `needsRenderRestart(prev, next)` → true면 stop→start
-- **단어 클릭**: `onWordClick` 콜백이 렌더러 → `word-click-callback.ts` → lazy `vocab-click-handler.ts` → `showVocabModal`
-- **캐시**: `TranslationCache.get/set/delete(text, source?)` — hostname 기반 컨텍스트 분리
-- **프롬프트**: `LEVEL_TEMPLATES[learningLevel]` — beginner/elementary/intermediate/advanced
-- **요청 관리**: `inflight` Map으로 in-flight dedup, max 3 동시 + FIFO 큐
-- **복잡도 학습**: `retranslateScores` 배열 → 60% 이상 임계값 미만이면 자동 하향
+## Drive 동기화 파일 (shared)
 
-## 스토리지 키
+- `review_logs.json` — `DriveReviewLogState { logs, version }`
+- `fsrs_state.json` — `DriveFsrsState { cardStates, version }`
+- `sync_metadata.json`, `vocab_*.json` — 기존 vocab/meta 동기화
 
-| 키 | 용도 |
-|---|---|
-| `jp_vocab_index` | 날짜 목록 + 총 개수 |
-| `jp_vocab_YYYY-MM-DD` | 날짜별 VocabEntry[] |
-| `jp_vocab_search_flat` | 검색 전용 경량 배열 |
-| `jp_glossary_custom` | 사용자 용어집 (단어장 자동 추가 포함) |
-| `jp_cache_*` | 번역 캐시 (hostname 포함 해시) |
-| `jp_cache_index` | 캐시 키 목록 + 타임스탬프 |
+## 공유 패키지 (shared)
+
+- `DriveReviewLogEntry { vocab_id, rating, reviewed_at }` 타입
+- `mergeReviewLogs()` — Set 기반 `vocab_id|reviewed_at` 중복 제거, 시간순 정렬
+- `DRIVE_REVIEW_LOG_FILE` 상수
+
+## UI 레이아웃 규칙
+
+- 모든 탭: `paddingTop: 80`, 타이틀 `fontSize.xxl (28)`, `fontWeight: '700'`, 좌측 정렬
+- 탭 헤더(네비게이션 바) 제거: `_layout.tsx`에서 `headerShown: false`
+- 단어장 sectionHeader: `backgroundColor: colors.bg`, `paddingTop` (margin 대신) 사용
 
 # Plan
 
 ## Decisions
 
-Phase 1~3: `decisions/0011-*.md`, `decisions/0012-*.md`
-Phase 4~5: `decisions/0013-*.md`, `decisions/0015-*.md`, `decisions/0016-*.md`
-
-핵심 결정:
-- 단어 클릭은 렌더러에 `onWordClick` 콜백 옵션으로 구현 (렌더러 API 확장)
-- 용어집 연동은 service-worker에서 storage 직접 접근 (GlossaryManager 인스턴스 불필요)
-- 검색 인덱스는 플랫 배열 방식 (역인덱스 대비 구현 단순, 1000개 이내 충분)
-- 캐시 키에 hostname 포함 (선택적, source 없으면 기존 호환)
-- 프롬프트 템플릿 4단계 (UserSettings.learningLevel 기반)
-- 복잡도 학습은 세션 내 (영구 저장 미적용 — 설정 변경은 사용자 의사 존중)
+- review_log 동기화: append-only 데이터 → merge-before-push 패턴 (합집합 보장)
+- 단일 파일 `review_logs.json` (연 ~1.2MB, 파티션 불필요)
+- FSRS push/pull과 동일 시점 수행 (추가 트리거 없음)
+- 탭 헤더 제거 → 각 화면 자체 타이틀로 통일
 
 ## Steps
 
-리팩토링 전체 완료. 남은 작업 없음.
+구현 완료. 커밋 대기.
 
 # Progress
 
-- [x] Phase 1: 공유 인프라 정비 (`192d71f`)
-- [x] Phase 2: 렌더링 통합 (`192d71f`)
-- [x] Phase 3: 판별·성능 최적화 (`47297c8`)
-- [x] Phase 4: 단어장 연동·기능 확장 (`cf6b29f`)
-- [x] Phase 5: 번역 파이프라인 고도화 (`cf6b29f`)
-
-전체 리팩토링 완료.
+- [x] review_log Drive 동기화 (shared 타입/머지 + mobile DB쿼리/push/pull/sync-manager)
+- [x] drive-api.ts TypeScript 에러 수정 (resp.json() 타입 단언)
+- [x] 탭 헤더 제거 (headerShown: false)
+- [x] 전체 탭 paddingTop 80 통일
+- [x] 전체 탭 타이틀 fontSize.xxl 통일
+- [x] 통계 화면 타이틀 좌측 정렬로 변경
+- [x] 단어장 sticky sectionHeader 배경색 + paddingTop 처리

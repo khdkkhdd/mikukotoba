@@ -1,6 +1,6 @@
-# JP Helper
+# ミク言葉 (Miku Kotoba)
 
-Monorepo for Japanese language learning: Chrome extension + iOS mobile app.
+일본어 학습 모노레포: Chrome extension + iOS mobile app.
 
 ## Structure
 
@@ -43,6 +43,7 @@ Three-layer dependency: Handler → Shared → Core (no reverse). See `context.m
 
 ### Mobile
 expo-router 파일 기반 라우팅. SQLite 로컬 DB + FSRS 스케줄링. shared의 DriveAPI/sync-core로 Drive 동기화.
+SyncManager (`services/sync-manager.ts`): vocab/FSRS 변경 시 30초 디바운스 push, 백그라운드 전환 시 즉시 flush, 포그라운드 복귀 시 자동 pull.
 
 ### Shared
-VocabEntry 타입, DriveAPI (순수 fetch), mergeEntries/cleanTombstones 동기화 함수. Chrome/RN 양쪽에서 사용.
+VocabEntry/DriveCardState/DriveFsrsState 타입, DriveAPI (순수 fetch), mergeEntries/cleanTombstones/mergeFsrsStates 동기화 함수. Chrome/RN 양쪽에서 사용.

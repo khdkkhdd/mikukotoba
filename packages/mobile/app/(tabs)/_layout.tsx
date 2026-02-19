@@ -5,8 +5,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.text,
+        headerShown: false,
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
@@ -18,33 +17,41 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'JP Helper',
-          tabBarLabel: '',
-          tabBarIcon: ({ color }) => <TabIcon label="" color={color} />,
+          title: 'ミク言葉',
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ color }) => <TabIcon label="🏠" color={color} />,
         }}
       />
       <Tabs.Screen
         name="vocab"
         options={{
-          title: '',
-          tabBarLabel: '',
-          tabBarIcon: ({ color }) => <TabIcon label="" color={color} />,
+          title: '단어장',
+          tabBarLabel: '단어',
+          tabBarIcon: ({ color }) => <TabIcon label="📖" color={color} />,
         }}
       />
       <Tabs.Screen
         name="study"
         options={{
-          title: '',
-          tabBarLabel: '',
-          tabBarIcon: ({ color }) => <TabIcon label="" color={color} />,
+          title: '학습',
+          tabBarLabel: '학습',
+          tabBarIcon: ({ color }) => <TabIcon label="✏️" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: '통계',
+          tabBarLabel: '통계',
+          tabBarIcon: ({ color }) => <TabIcon label="📊" color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: '',
-          tabBarLabel: '',
-          tabBarIcon: ({ color }) => <TabIcon label="" color={color} />,
+          title: '설정',
+          tabBarLabel: '설정',
+          tabBarIcon: ({ color }) => <TabIcon label="⚙️" color={color} />,
         }}
       />
     </Tabs>

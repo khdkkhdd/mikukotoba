@@ -3,8 +3,9 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useDatabase } from '../src/components/DatabaseContext';
 import { useVocabStore } from '../src/stores/vocab-store';
-import type { VocabEntry } from '@jp-helper/shared';
+import type { VocabEntry } from '@mikukotoba/shared';
 import { colors, spacing, fontSize } from '../src/components/theme';
+import { markVocabDirty } from '../src/services/sync-manager';
 
 export default function AddScreen() {
   const router = useRouter();
@@ -41,6 +42,7 @@ export default function AddScreen() {
     };
 
     await addEntry(database, entry);
+    markVocabDirty(entry.dateAdded);
     router.back();
   };
 

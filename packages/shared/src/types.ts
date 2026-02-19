@@ -48,3 +48,34 @@ export interface DriveSyncMeta {
   partitionVersions: Record<string, number>;
   deletedEntries: Record<string, number>;
 }
+
+// FSRS 카드 상태 동기화
+export interface DriveCardState {
+  state: number;
+  due: string;                    // ISO 8601
+  stability: number;
+  difficulty: number;
+  elapsed_days: number;
+  scheduled_days: number;
+  reps: number;
+  lapses: number;
+  last_review: string | null;     // ISO 8601, 머지 기준
+  learning_steps?: number;
+}
+
+export interface DriveFsrsState {
+  cardStates: Record<string, DriveCardState>;  // vocabId → state
+  version: number;                              // unix ms
+}
+
+// Review log 동기화
+export interface DriveReviewLogEntry {
+  vocab_id: string;
+  rating: number;
+  reviewed_at: string;    // ISO 8601
+}
+
+export interface DriveReviewLogState {
+  logs: DriveReviewLogEntry[];
+  version: number;        // unix ms
+}

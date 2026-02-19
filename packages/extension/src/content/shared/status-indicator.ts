@@ -1,5 +1,5 @@
 /**
- * Floating status indicator for JP Helper.
+ * Floating status indicator for ミク言葉.
  * Shows current state: detecting → translating (N/M) → done / error.
  * Uses Shadow DOM for style isolation from host page.
  */
@@ -99,7 +99,7 @@ export class StatusIndicator {
   private fadeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    this.host = document.createElement('jp-helper-status');
+    this.host = document.createElement('mikukotoba-status');
     this.shadow = this.host.attachShadow({ mode: 'closed' });
 
     const style = document.createElement('style');
@@ -113,7 +113,7 @@ export class StatusIndicator {
 
     this.label = document.createElement('span');
     this.label.className = 'label';
-    this.label.textContent = 'JP Helper';
+    this.label.textContent = 'ミク言葉';
 
     this.countsEl = document.createElement('span');
     this.countsEl.className = 'counts';
@@ -206,7 +206,7 @@ export class StatusIndicator {
 
     // Label
     const labels: Record<Status, string> = {
-      idle: 'JP Helper',
+      idle: 'ミク言葉',
       detecting: '일본어 감지',
       translating: '번역 중',
       done: '번역 완료',

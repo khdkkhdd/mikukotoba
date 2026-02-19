@@ -165,20 +165,20 @@ function getModalStyles(): string {
 
     .vm-modal {
       background: #FFFFFF;
-      border: 1px solid #E8E4DF;
+      border: 1px solid #DEE6EA;
       border-radius: 12px;
       padding: 20px 24px;
       min-width: 360px;
       max-width: 480px;
       width: 90vw;
-      box-shadow: 0 8px 32px rgba(120, 100, 80, 0.15);
-      color: #5C5650;
+      box-shadow: 0 8px 32px rgba(60, 100, 110, 0.15);
+      color: #5A6570;
     }
 
     .vm-header {
       font-size: 16px;
       font-weight: 700;
-      color: #2D2A26;
+      color: #2D3436;
       margin-bottom: 16px;
     }
 
@@ -187,15 +187,15 @@ function getModalStyles(): string {
       align-items: center;
       gap: 8px;
       padding: 20px 0;
-      color: #9C958E;
+      color: #8E9AA4;
       font-size: 14px;
     }
 
     .vm-spinner {
       width: 16px;
       height: 16px;
-      border: 2px solid #E8E4DF;
-      border-top-color: #C96B4F;
+      border: 2px solid #DEE6EA;
+      border-top-color: #39C5BB;
       border-radius: 50%;
       animation: vm-spin 0.6s linear infinite;
     }
@@ -215,17 +215,17 @@ function getModalStyles(): string {
       flex-direction: column;
       gap: 3px;
       font-size: 11px;
-      color: #9C958E;
+      color: #8E9AA4;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
     .vm-input {
-      background: #F5F2EE;
-      border: 1px solid #E8E4DF;
+      background: #F2F7F7;
+      border: 1px solid #DEE6EA;
       border-radius: 6px;
       padding: 8px 10px;
-      color: #2D2A26;
+      color: #2D3436;
       font-size: 14px;
       outline: none;
       transition: border-color 150ms;
@@ -233,7 +233,7 @@ function getModalStyles(): string {
     }
 
     .vm-input:focus {
-      border-color: #C96B4F;
+      border-color: #39C5BB;
     }
 
     .vm-buttons {
@@ -254,21 +254,21 @@ function getModalStyles(): string {
     }
 
     .vm-btn-cancel {
-      background: #F0EDE8;
-      color: #5C5650;
+      background: #EBF0F2;
+      color: #5A6570;
     }
 
     .vm-btn-cancel:hover {
-      background: #E8E4DF;
+      background: #DEE6EA;
     }
 
     .vm-btn-save {
-      background: #C96B4F;
-      color: #fff;
+      background: #39C5BB;
+      color: #0D4F52;
     }
 
     .vm-btn-save:hover {
-      background: #B85A40;
+      background: #2EADA3;
     }
   `;
 }

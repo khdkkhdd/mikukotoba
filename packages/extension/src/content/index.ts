@@ -120,7 +120,7 @@ async function init(): Promise<void> {
       if (r.status === 'fulfilled') {
         activeHandlers.push(r.value);
       } else {
-        log.error('[JP Helper] Handler init failed:', r.reason);
+        log.error('[ミク言葉] Handler init failed:', r.reason);
       }
     }
   }
@@ -178,7 +178,7 @@ async function startLazyHandlers(handlers: SiteHandler[]): Promise<void> {
     if (r.status === 'fulfilled') {
       activeHandlers.push(r.value);
     } else {
-      log.error('[JP Helper] Lazy handler init failed:', r.reason);
+      log.error('[ミク言葉] Lazy handler init failed:', r.reason);
     }
   }
 }

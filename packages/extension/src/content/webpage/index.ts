@@ -121,7 +121,7 @@ export class WebpageSiteHandler implements SiteHandler {
     this.hoverTooltip = new HoverTooltip(
       this.settings,
       {
-        popupId: 'jp-helper-hover-popup',
+        popupId: 'mikukotoba-hover-popup',
         debounceMs: 1000,
         escapeToClose: true,
         getTargetAtPoint: (x, y) => this.getTextBlockAtPoint(x, y),

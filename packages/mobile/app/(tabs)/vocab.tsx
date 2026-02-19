@@ -1,16 +1,22 @@
-import { View, Text, TextInput, FlatList, Pressable, StyleSheet, SectionList } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, SectionList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useMemo, useCallback } from 'react';
 import { useDatabase } from '../../src/components/DatabaseContext';
 import { useVocabStore } from '../../src/stores/vocab-store';
-import type { VocabEntry } from '@jp-helper/shared';
+import { Calendar, type CalendarMarking } from '../../src/components/Calendar';
+import type { VocabEntry } from '@mikukotoba/shared';
 import { colors, spacing, fontSize } from '../../src/components/theme';
+
+type ViewMode = 'all' | 'date';
 
 export default function VocabScreen() {
   const router = useRouter();
   const database = useDatabase();
-  const { entries, totalCount, search } = useVocabStore();
+  const { entries, dateGroups, totalCount, search } = useVocabStore();
   const [query, setQuery] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('all');
+  const [selectedDate, setSelectedDate] = useState<string | undefined>();
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const handleSearch = useCallback(
     (text: string) => {
@@ -20,10 +26,39 @@ export default function VocabScreen() {
     [database, search]
   );
 
+  // 캘린더 마킹
+  const markings = useMemo<CalendarMarking>(() => {
+    const m: CalendarMarking = {};
+    for (const g of dateGroups) {
+      m[g.date] = { dotCount: g.count >= 10 ? 3 : g.count >= 5 ? 2 : 1 };
+    }
+    return m;
+  }, [dateGroups]);
+
+  // 날짜 선택
+  const handleSelectDate = useCallback((date: string) => {
+    setSelectedDate(date);
+    setViewMode('date');
+  }, []);
+
+  // 전체 보기로 복귀
+  const handleShowAll = useCallback(() => {
+    setViewMode('all');
+    setSelectedDate(undefined);
+  }, []);
+
+  // 필터링된 entries
+  const filteredEntries = useMemo(() => {
+    if (viewMode === 'date' && selectedDate) {
+      return entries.filter((e) => e.dateAdded === selectedDate);
+    }
+    return entries;
+  }, [entries, viewMode, selectedDate]);
+
   // 날짜별 그룹
   const sections = useMemo(() => {
     const grouped = new Map<string, VocabEntry[]>();
-    for (const entry of entries) {
+    for (const entry of filteredEntries) {
       const list = grouped.get(entry.dateAdded) ?? [];
       list.push(entry);
       grouped.set(entry.dateAdded, list);
@@ -31,14 +66,41 @@ export default function VocabScreen() {
     return [...grouped.entries()]
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([date, data]) => ({ title: date, data }));
-  }, [entries]);
+  }, [filteredEntries]);
+
+  const displayCount = viewMode === 'date' ? filteredEntries.length : totalCount;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>단어장</Text>
-        <Text style={styles.count}>{totalCount}개</Text>
+        <Text style={styles.count}>{displayCount}개</Text>
+        <View style={{ flex: 1 }} />
+        <Pressable
+          style={[styles.calendarToggle, calendarOpen && styles.calendarToggleActive]}
+          onPress={() => setCalendarOpen((v) => !v)}
+        >
+          <Text style={styles.calendarToggleText}>📅</Text>
+        </Pressable>
       </View>
+
+      {/* 모드 토글 */}
+      {calendarOpen && (
+        <View style={styles.calendarSection}>
+          <Calendar
+            mode="single"
+            selectedDate={selectedDate}
+            onSelectDate={handleSelectDate}
+            markings={markings}
+          />
+          {viewMode === 'date' && (
+            <Pressable style={styles.showAllButton} onPress={handleShowAll}>
+              <Text style={styles.showAllText}>전체 보기</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
       <TextInput
         style={styles.searchInput}
         placeholder="검색..."
@@ -71,7 +133,9 @@ export default function VocabScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>📚</Text>
-            <Text style={styles.emptyText}>저장된 단어가 없습니다</Text>
+            <Text style={styles.emptyText}>
+              {viewMode === 'date' ? '이 날짜에 단어가 없습니다' : '저장된 단어가 없습니다'}
+            </Text>
           </View>
         }
         contentContainerStyle={styles.list}
@@ -87,11 +151,38 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    paddingTop: 60,
+    paddingTop: 80,
     paddingBottom: spacing.sm,
   },
-  title: { fontSize: fontSize.xl, fontWeight: '700', color: colors.text },
+  title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
   count: { fontSize: fontSize.sm, color: colors.textMuted },
+  calendarToggle: {
+    padding: spacing.xs,
+    borderRadius: 6,
+  },
+  calendarToggleActive: {
+    backgroundColor: colors.accentLight,
+  },
+  calendarToggleText: {
+    fontSize: 20,
+  },
+  calendarSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  showAllButton: {
+    alignSelf: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: 16,
+    backgroundColor: colors.borderLight,
+  },
+  showAllText: {
+    fontSize: fontSize.sm,
+    color: colors.accent,
+    fontWeight: '600',
+  },
   searchInput: {
     backgroundColor: colors.card,
     borderWidth: 1,
@@ -110,10 +201,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginHorizontal: -spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     marginBottom: spacing.sm,
-    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    backgroundColor: colors.bg,
   },
   sectionDate: { fontSize: fontSize.sm, color: colors.textMuted },
   sectionCount: { fontSize: fontSize.xs, color: colors.textPlaceholder },

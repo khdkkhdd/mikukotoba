@@ -8,8 +8,8 @@ body {
   width: 300px;
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 13px;
-  color: #5C5650;
-  background: #FAF8F5;
+  color: #5A6570;
+  background: #F7FAFA;
 }
 
 .popup {
@@ -30,8 +30,8 @@ body {
 }
 
 .logo-badge {
-  background: #C96B4F;
-  color: #fff;
+  background: #39C5BB;
+  color: #0D4F52;
   font-size: 11px;
   font-weight: 800;
   padding: 2px 6px;
@@ -42,7 +42,7 @@ body {
 .title {
   font-size: 16px;
   font-weight: 700;
-  color: #2D2A26;
+  color: #2D3436;
   letter-spacing: 0.5px;
 }
 
@@ -55,7 +55,7 @@ body {
 .icon-btn {
   background: none;
   border: none;
-  color: #9C958E;
+  color: #8E9AA4;
   font-size: 18px;
   cursor: pointer;
   padding: 4px;
@@ -64,20 +64,20 @@ body {
 }
 
 .icon-btn:hover {
-  background: #E8E4DF;
-  color: #5C5650;
+  background: #DEE6EA;
+  color: #5A6570;
 }
 
 /* Dividers */
 .divider {
   height: 1px;
-  background: #E8E4DF;
+  background: #DEE6EA;
   margin: 10px 0;
 }
 
 .sub-divider {
   height: 1px;
-  background: #E8E4DF;
+  background: #DEE6EA;
   margin: 8px 0;
   opacity: 0.6;
 }
@@ -91,13 +91,13 @@ body {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #9C958E;
+  color: #8E9AA4;
   margin-bottom: 6px;
 }
 
 .sub-section-title {
   font-size: 12px;
-  color: #9C958E;
+  color: #8E9AA4;
   margin-bottom: 4px;
 }
 
@@ -113,7 +113,7 @@ body {
   appearance: none;
   width: 40px;
   height: 22px;
-  background: #E8E4DF;
+  background: #DEE6EA;
   border-radius: 11px;
   position: relative;
   cursor: pointer;
@@ -134,7 +134,7 @@ body {
 }
 
 .toggle:checked {
-  background: #C96B4F;
+  background: #39C5BB;
 }
 
 .toggle:checked::after {
@@ -144,7 +144,7 @@ body {
 
 .hint {
   font-size: 10px;
-  color: #9C958E;
+  color: #8E9AA4;
   margin-top: 2px;
 }
 
@@ -159,7 +159,7 @@ body {
 }
 
 .radio-row input[type="radio"] {
-  accent-color: #C96B4F;
+  accent-color: #39C5BB;
 }
 
 /* Checkbox */
@@ -172,7 +172,7 @@ body {
 }
 
 .checkbox-row input[type="checkbox"] {
-  accent-color: #C96B4F;
+  accent-color: #39C5BB;
 }
 
 /* Select */
@@ -184,9 +184,9 @@ body {
 }
 
 .select-row select {
-  background: #F5F2EE;
-  color: #2D2A26;
-  border: 1px solid #E8E4DF;
+  background: #F2F7F7;
+  color: #2D3436;
+  border: 1px solid #DEE6EA;
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
@@ -202,26 +202,26 @@ body {
 
 .slider-label {
   font-size: 11px;
-  color: #9C958E;
+  color: #8E9AA4;
   white-space: nowrap;
 }
 
 .slider-row input[type="range"] {
   flex: 1;
-  accent-color: #C96B4F;
+  accent-color: #39C5BB;
   height: 4px;
 }
 
 .slider-info {
   text-align: center;
   font-size: 11px;
-  color: #9C958E;
+  color: #8E9AA4;
   margin-top: 4px;
 }
 
 /* API Status Card */
 .api-status-card {
-  background: #F5F2EE;
+  background: #F2F7F7;
   border-radius: 8px;
   padding: 8px 12px;
   margin-top: 6px;
@@ -232,7 +232,7 @@ body {
   align-items: center;
   justify-content: space-between;
   font-size: 11px;
-  color: #9C958E;
+  color: #8E9AA4;
 }
 
 .status-item {
@@ -249,12 +249,12 @@ body {
 }
 
 .status-dot.on {
-  background: #5B8A72;
-  box-shadow: 0 0 4px rgba(91, 138, 114, 0.5);
+  background: #3EA87E;
+  box-shadow: 0 0 4px rgba(62, 168, 126, 0.5);
 }
 
 .status-dot.off {
-  background: #BFB8B0;
+  background: #B4BFC8;
 }
 
 .status-dot.error {

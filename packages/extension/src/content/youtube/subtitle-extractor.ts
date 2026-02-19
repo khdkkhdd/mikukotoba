@@ -95,21 +95,21 @@ export class SubtitleExtractor {
       const handler = (e: Event) => {
         if (resolved) return;
         resolved = true;
-        window.removeEventListener('jp-helper-captions-enabled', handler);
+        window.removeEventListener('mikukotoba-captions-enabled', handler);
         const data = JSON.parse((e as CustomEvent).detail);
         log.info('enableCaptions:', data.info);
         resolve(data.success);
       };
 
-      window.addEventListener('jp-helper-captions-enabled', handler);
+      window.addEventListener('mikukotoba-captions-enabled', handler);
       window.dispatchEvent(
-        new CustomEvent('jp-helper-enable-captions', { detail: lang }),
+        new CustomEvent('mikukotoba-enable-captions', { detail: lang }),
       );
 
       setTimeout(() => {
         if (resolved) return;
         resolved = true;
-        window.removeEventListener('jp-helper-captions-enabled', handler);
+        window.removeEventListener('mikukotoba-captions-enabled', handler);
         log.info('enableCaptions: bridge timeout');
         resolve(false);
       }, 1000);
@@ -285,7 +285,7 @@ export class SubtitleExtractor {
       const handler = (e: Event) => {
         if (resolved) return;
         resolved = true;
-        window.removeEventListener('jp-helper-tracks-response', handler);
+        window.removeEventListener('mikukotoba-tracks-response', handler);
         try {
           resolve(JSON.parse((e as CustomEvent).detail));
         } catch {
@@ -293,14 +293,14 @@ export class SubtitleExtractor {
         }
       };
 
-      window.addEventListener('jp-helper-tracks-response', handler);
-      window.dispatchEvent(new Event('jp-helper-get-tracks'));
+      window.addEventListener('mikukotoba-tracks-response', handler);
+      window.dispatchEvent(new Event('mikukotoba-get-tracks'));
 
       // Timeout — if bridge doesn't respond, try HTML parsing fallback
       setTimeout(() => {
         if (resolved) return;
         resolved = true;
-        window.removeEventListener('jp-helper-tracks-response', handler);
+        window.removeEventListener('mikukotoba-tracks-response', handler);
         log.info('extractCaptionTracks: bridge timeout, trying HTML parsing');
         resolve(this.extractCaptionTracksFromHtml());
       }, 500);
@@ -359,7 +359,7 @@ export class SubtitleExtractor {
         if (data.id !== id) return; // not our response
         if (resolved) return;
         resolved = true;
-        window.removeEventListener('jp-helper-fetch-response', handler);
+        window.removeEventListener('mikukotoba-fetch-response', handler);
         log.info('bridgeFetch: HTTP', data.status,
           'bodyLen:', (data.text || '').length,
           data.error ? `err: ${data.error}` : '',
@@ -367,9 +367,9 @@ export class SubtitleExtractor {
         resolve(data.text || '');
       };
 
-      window.addEventListener('jp-helper-fetch-response', handler);
+      window.addEventListener('mikukotoba-fetch-response', handler);
       window.dispatchEvent(
-        new CustomEvent('jp-helper-fetch-url', {
+        new CustomEvent('mikukotoba-fetch-url', {
           detail: JSON.stringify({ url, id }),
         }),
       );
@@ -378,7 +378,7 @@ export class SubtitleExtractor {
       setTimeout(() => {
         if (resolved) return;
         resolved = true;
-        window.removeEventListener('jp-helper-fetch-response', handler);
+        window.removeEventListener('mikukotoba-fetch-response', handler);
         log.info('bridgeFetch: timeout, trying direct fetch');
         fetch(url)
           .then((r) => (r.ok ? r.text() : ''))

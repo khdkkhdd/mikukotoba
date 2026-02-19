@@ -1,5 +1,5 @@
 {
-  "name": "@jp-helper/extension",
+  "name": "@mikukotoba/extension",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@jp-helper/shared": "*",
+    "@mikukotoba/shared": "*",
     "kuromoji": "^0.1.2",
     "kuroshiro": "^1.2.0",
     "kuroshiro-analyzer-kuromoji": "^1.1.0",

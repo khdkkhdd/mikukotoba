@@ -50,7 +50,7 @@ test('YouTube page handler detects and processes elements', async () => {
   const logs: string[] = [];
   page.on('console', (msg) => {
     const text = msg.text();
-    if (text.includes('[JP Helper]')) {
+    if (text.includes('[ミク言葉]')) {
       logs.push(text);
     }
   });
@@ -66,8 +66,8 @@ test('YouTube page handler detects and processes elements', async () => {
   // Wait for the extension to process elements (delayed rescans at 500, 1500, 3000ms)
   await page.waitForTimeout(6000);
 
-  // Print all JP Helper logs
-  console.log('\n=== JP Helper Console Logs ===');
+  // Print all ミク言葉 logs
+  console.log('\n=== ミク言葉 Console Logs ===');
   for (const l of logs) {
     console.log(l);
   }

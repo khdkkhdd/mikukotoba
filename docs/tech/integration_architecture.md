@@ -173,15 +173,15 @@ YouTube 자막 추출은 페이지의 MAIN world에 접근해야 하므로 별�
 ```
 Content Script (ISOLATED world)          MAIN World Script (caption-bridge.ts)
         │                                          │
-        │  CustomEvent: 'jp-helper-get-tracks'     │
+        │  CustomEvent: 'mikukotoba-get-tracks'     │
         ├─────────────────────────────────────────▶│
         │                                          │ player.getAvailableTracks()
-        │  CustomEvent: 'jp-helper-tracks-response'│
+        │  CustomEvent: 'mikukotoba-tracks-response'│
         │◀─────────────────────────────────────────┤
         │                                          │
-        │  CustomEvent: 'jp-helper-enable-captions'│
+        │  CustomEvent: 'mikukotoba-enable-captions'│
         ├─────────────────────────────────────────▶│
-        │  CustomEvent: 'jp-helper-fetch-url'      │
+        │  CustomEvent: 'mikukotoba-fetch-url'      │
         ├─────────────────────────────────────────▶│
 ```
 

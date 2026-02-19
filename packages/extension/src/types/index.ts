@@ -149,7 +149,7 @@ import type {
   SyncMetadata as _SyncMetadata,
   DriveStatus as _DriveStatus,
   SyncResult as _SyncResult,
-} from '@jp-helper/shared';
+} from '@mikukotoba/shared';
 
 export type VocabEntry = _VocabEntry;
 export type VocabStorageIndex = _VocabStorageIndex;

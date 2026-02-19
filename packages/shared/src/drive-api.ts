@@ -23,7 +23,7 @@ export const DriveAPI = {
       throw new Error(`Drive listFiles failed: ${resp.status}`);
     }
 
-    const data = await resp.json();
+    const data = await resp.json() as { files?: DriveFile[] };
     return data.files || [];
   },
 
@@ -36,7 +36,7 @@ export const DriveAPI = {
       throw new Error(`Drive getFile failed: ${resp.status}`);
     }
 
-    return resp.json();
+    return resp.json() as Promise<T>;
   },
 
   async createFile(token: string, name: string, content: unknown): Promise<string> {
@@ -45,7 +45,7 @@ export const DriveAPI = {
       parents: ['appDataFolder'],
     };
 
-    const boundary = '---jp_helper_boundary';
+    const boundary = '---mikukotoba_boundary';
     const body = [
       `--${boundary}`,
       'Content-Type: application/json; charset=UTF-8',
@@ -71,7 +71,7 @@ export const DriveAPI = {
       throw new Error(`Drive createFile failed: ${resp.status}`);
     }
 
-    const data = await resp.json();
+    const data = await resp.json() as { id: string };
     return data.id;
   },
 
@@ -106,7 +106,7 @@ export const DriveAPI = {
       throw new Error(`Drive findFileByName failed: ${resp.status}`);
     }
 
-    const data = await resp.json();
+    const data = await resp.json() as { files?: { id: string }[] };
     return data.files?.[0]?.id || null;
   },
 };

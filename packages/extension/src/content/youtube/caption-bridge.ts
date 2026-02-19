@@ -20,7 +20,7 @@ interface YTPlayer extends HTMLElement {
 /**
  * Return caption track metadata from the player response.
  */
-window.addEventListener('jp-helper-get-tracks', () => {
+window.addEventListener('mikukotoba-get-tracks', () => {
   let tracks: unknown[] = [];
   try {
     const player = document.getElementById('movie_player') as YTPlayer | null;
@@ -47,7 +47,7 @@ window.addEventListener('jp-helper-get-tracks', () => {
   }
 
   window.dispatchEvent(
-    new CustomEvent('jp-helper-tracks-response', {
+    new CustomEvent('mikukotoba-tracks-response', {
       detail: JSON.stringify(tracks),
     }),
   );
@@ -57,7 +57,7 @@ window.addEventListener('jp-helper-get-tracks', () => {
  * Programmatically enable a caption track on the YouTube player.
  * This loads the subtitle data into HTML5 TextTrack API.
  */
-window.addEventListener('jp-helper-enable-captions', (e: Event) => {
+window.addEventListener('mikukotoba-enable-captions', (e: Event) => {
   let success = false;
   let info = '';
   try {
@@ -99,7 +99,7 @@ window.addEventListener('jp-helper-enable-captions', (e: Event) => {
   }
 
   window.dispatchEvent(
-    new CustomEvent('jp-helper-captions-enabled', {
+    new CustomEvent('mikukotoba-captions-enabled', {
       detail: JSON.stringify({ success, info }),
     }),
   );
@@ -108,20 +108,20 @@ window.addEventListener('jp-helper-enable-captions', (e: Event) => {
 /**
  * Fetch a URL from the page's same-origin context.
  */
-window.addEventListener('jp-helper-fetch-url', (e: Event) => {
+window.addEventListener('mikukotoba-fetch-url', (e: Event) => {
   const { url, id } = JSON.parse((e as CustomEvent).detail);
   fetch(url)
     .then(async (r) => {
       const text = await r.text();
       window.dispatchEvent(
-        new CustomEvent('jp-helper-fetch-response', {
+        new CustomEvent('mikukotoba-fetch-response', {
           detail: JSON.stringify({ id, status: r.status, text }),
         }),
       );
     })
     .catch((err) => {
       window.dispatchEvent(
-        new CustomEvent('jp-helper-fetch-response', {
+        new CustomEvent('mikukotoba-fetch-response', {
           detail: JSON.stringify({ id, status: 0, text: '', error: String(err) }),
         }),
       );

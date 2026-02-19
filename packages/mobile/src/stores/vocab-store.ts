@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { VocabEntry } from '@jp-helper/shared';
+import type { VocabEntry } from '@mikukotoba/shared';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import * as db from '../db';
 

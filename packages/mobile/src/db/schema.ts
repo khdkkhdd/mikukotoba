@@ -30,7 +30,8 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
       scheduled_days INTEGER DEFAULT 0,
       reps INTEGER DEFAULT 0,
       lapses INTEGER DEFAULT 0,
-      last_review TEXT
+      last_review TEXT,
+      learning_steps INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS review_log (
@@ -54,4 +55,13 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_card_due ON card_state(due);
     CREATE INDEX IF NOT EXISTS idx_review_vocab ON review_log(vocab_id);
   `);
+
+  await migrateCardStateLearningSteps(db);
+}
+
+async function migrateCardStateLearningSteps(db: SQLiteDatabase): Promise<void> {
+  const cols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(card_state)');
+  if (!cols.some((c) => c.name === 'learning_steps')) {
+    await db.execAsync('ALTER TABLE card_state ADD COLUMN learning_steps INTEGER DEFAULT 0');
+  }
 }

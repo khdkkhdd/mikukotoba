@@ -16,8 +16,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@jp-helper/shared": ["../shared/src/index.ts"],
-      "@jp-helper/shared/*": ["../shared/src/*"]
+      "@mikukotoba/shared": ["../shared/src/index.ts"],
+      "@mikukotoba/shared/*": ["../shared/src/*"]
     }
   },
   "include": ["src/**/*.ts"],

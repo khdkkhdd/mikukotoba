@@ -6,8 +6,8 @@
 
 body {
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #FAF8F5;
-  color: #5C5650;
+  background: #F7FAFA;
+  color: #5A6570;
   min-height: 100vh;
 }
 
@@ -20,7 +20,7 @@ body {
 .page-header h1 {
   font-size: 24px;
   font-weight: 700;
-  color: #2D2A26;
+  color: #2D3436;
   margin-bottom: 24px;
   display: flex;
   align-items: center;
@@ -28,8 +28,8 @@ body {
 }
 
 .logo-badge {
-  background: #C96B4F;
-  color: #fff;
+  background: #39C5BB;
+  color: #0D4F52;
   font-size: 13px;
   font-weight: 800;
   padding: 3px 8px;
@@ -45,37 +45,37 @@ body {
 /* Card */
 .card {
   background: #FFFFFF;
-  border: 1px solid #E8E4DF;
+  border: 1px solid #DEE6EA;
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(120, 100, 80, 0.08);
+  box-shadow: 0 2px 8px rgba(60, 100, 110, 0.08);
 }
 
 .card h2 {
   font-size: 16px;
   font-weight: 600;
-  color: #2D2A26;
+  color: #2D3436;
   margin-bottom: 16px;
 }
 
 .card h3 {
   font-size: 14px;
   font-weight: 600;
-  color: #5C5650;
+  color: #5A6570;
   margin-bottom: 10px;
 }
 
 .help-text {
   font-size: 12px;
-  color: #9C958E;
+  color: #8E9AA4;
   margin-bottom: 12px;
   line-height: 1.5;
 }
 
 /* API Provider Accordion */
 .api-provider {
-  border: 1px solid #E8E4DF;
+  border: 1px solid #DEE6EA;
   border-radius: 8px;
   margin-bottom: 10px;
   overflow: hidden;
@@ -86,16 +86,16 @@ body {
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 600;
-  color: #2D2A26;
+  color: #2D3436;
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #F5F2EE;
+  background: #F2F7F7;
   transition: background 150ms;
 }
 
 .api-provider-summary:hover {
-  background: #E8E4DF;
+  background: #DEE6EA;
 }
 
 .api-provider-content {
@@ -109,8 +109,8 @@ body {
   display: inline-block;
 }
 
-.provider-papago { background: #5B8A72; }
-.provider-claude { background: #C96B4F; }
+.provider-papago { background: #3EA87E; }
+.provider-claude { background: #39C5BB; }
 .provider-openai { background: #5A9E8F; }
 .provider-gemini { background: #D4A843; }
 
@@ -122,7 +122,7 @@ body {
 .form-group label {
   display: block;
   font-size: 13px;
-  color: #5C5650;
+  color: #5A6570;
   margin-bottom: 6px;
 }
 
@@ -137,11 +137,11 @@ body {
 
 input[type="text"],
 input[type="password"] {
-  background: #F5F2EE;
-  border: 1px solid #E8E4DF;
+  background: #F2F7F7;
+  border: 1px solid #DEE6EA;
   border-radius: 6px;
   padding: 10px 12px;
-  color: #2D2A26;
+  color: #2D3436;
   font-size: 13px;
   width: 100%;
   transition: border-color 200ms;
@@ -149,27 +149,27 @@ input[type="password"] {
 
 input[type="text"]::placeholder,
 input[type="password"]::placeholder {
-  color: #BFB8B0;
+  color: #B4BFC8;
 }
 
 input[type="text"]:focus,
 input[type="password"]:focus {
-  border-color: #C96B4F;
+  border-color: #39C5BB;
   outline: none;
 }
 
 input[type="range"] {
   width: 100%;
-  accent-color: #C96B4F;
+  accent-color: #39C5BB;
 }
 
 input[type="color"] {
   width: 48px;
   height: 32px;
-  border: 1px solid #E8E4DF;
+  border: 1px solid #DEE6EA;
   border-radius: 4px;
   cursor: pointer;
-  background: #F5F2EE;
+  background: #F2F7F7;
   padding: 2px;
 }
 
@@ -181,23 +181,23 @@ input[type="color"] {
 
 .color-hex {
   font-size: 11px;
-  color: #9C958E;
+  color: #8E9AA4;
   font-family: monospace;
 }
 
 .select-full {
   width: 100%;
-  background: #F5F2EE;
-  border: 1px solid #E8E4DF;
+  background: #F2F7F7;
+  border: 1px solid #DEE6EA;
   border-radius: 6px;
   padding: 10px 12px;
-  color: #2D2A26;
+  color: #2D3436;
   font-size: 13px;
   transition: border-color 200ms;
 }
 
 .select-full:focus {
-  border-color: #C96B4F;
+  border-color: #39C5BB;
   outline: none;
 }
 
@@ -212,35 +212,35 @@ input[type="color"] {
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: #9C958E;
+  color: #8E9AA4;
   margin-top: 4px;
 }
 
 /* Buttons */
 .btn {
-  background: #F0EDE8;
-  border: 1px solid #E8E4DF;
+  background: #EBF0F2;
+  border: 1px solid #DEE6EA;
   border-radius: 6px;
   padding: 8px 16px;
-  color: #5C5650;
+  color: #5A6570;
   font-size: 13px;
   cursor: pointer;
   transition: all 150ms;
 }
 
 .btn:hover {
-  background: #E8E4DF;
-  border-color: #D0CBC4;
+  background: #DEE6EA;
+  border-color: #B8C8CE;
 }
 
 .btn-primary {
-  background: #C96B4F;
-  border-color: #C96B4F;
-  color: #fff;
+  background: #39C5BB;
+  border-color: #39C5BB;
+  color: #0D4F52;
 }
 
 .btn-primary:hover {
-  background: #B85A40;
+  background: #2EADA3;
 }
 
 .btn-danger {
@@ -256,15 +256,15 @@ input[type="color"] {
 .btn-small {
   padding: 6px 12px;
   font-size: 12px;
-  background: #F0EDE8;
-  border: 1px solid #E8E4DF;
+  background: #EBF0F2;
+  border: 1px solid #DEE6EA;
   border-radius: 4px;
-  color: #5C5650;
+  color: #5A6570;
   cursor: pointer;
 }
 
 .btn-small:hover {
-  background: #E8E4DF;
+  background: #DEE6EA;
 }
 
 .test-result {
@@ -273,7 +273,7 @@ input[type="color"] {
 }
 
 .test-result.success {
-  color: #5B8A72;
+  color: #3EA87E;
 }
 
 .test-result.error {
@@ -361,31 +361,31 @@ input[type="color"] {
   align-items: center;
   gap: 12px;
   padding: 8px;
-  border-bottom: 1px solid #E8E4DF;
+  border-bottom: 1px solid #DEE6EA;
   font-size: 13px;
 }
 
 .glossary-item .g-jp {
   min-width: 120px;
-  color: #2D2A26;
+  color: #2D3436;
   font-weight: 600;
 }
 
 .glossary-item .g-ko {
   min-width: 100px;
-  color: #C96B4F;
+  color: #39C5BB;
 }
 
 .glossary-item .g-note {
   flex: 1;
-  color: #9C958E;
+  color: #8E9AA4;
   font-size: 11px;
 }
 
 .glossary-item .g-delete {
   background: none;
   border: none;
-  color: #9C958E;
+  color: #8E9AA4;
   cursor: pointer;
   font-size: 14px;
   padding: 2px 6px;
@@ -412,19 +412,19 @@ input[type="color"] {
 .stat-item {
   text-align: center;
   padding: 12px;
-  background: #F5F2EE;
+  background: #F2F7F7;
   border-radius: 8px;
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #2D2A26;
+  color: #2D3436;
 }
 
 .stat-label {
   font-size: 11px;
-  color: #9C958E;
+  color: #8E9AA4;
   margin-top: 4px;
 }
 
@@ -433,16 +433,16 @@ input[type="color"] {
   height: 8px;
   border-radius: 4px;
   overflow: hidden;
-  background: #E8E4DF;
+  background: #DEE6EA;
 }
 
 .usage-papago {
-  background: #5B8A72;
+  background: #3EA87E;
   transition: width 300ms;
 }
 
 .usage-claude {
-  background: #C96B4F;
+  background: #39C5BB;
   transition: width 300ms;
 }
 
@@ -461,7 +461,7 @@ input[type="color"] {
   justify-content: center;
   gap: 24px;
   font-size: 11px;
-  color: #9C958E;
+  color: #8E9AA4;
   margin-top: 6px;
 }
 
@@ -471,7 +471,7 @@ input[type="color"] {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #5B8A72;
+  background: #3EA87E;
   margin-right: 4px;
 }
 
@@ -481,7 +481,7 @@ input[type="color"] {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #C96B4F;
+  background: #39C5BB;
   margin-right: 4px;
 }
 
@@ -521,13 +521,13 @@ input[type="color"] {
 }
 
 kbd {
-  background: #F5F2EE;
-  border: 1px solid #E8E4DF;
+  background: #F2F7F7;
+  border: 1px solid #DEE6EA;
   border-radius: 4px;
   padding: 3px 8px;
   font-size: 12px;
   font-family: monospace;
-  color: #2D2A26;
+  color: #2D3436;
 }
 
 /* Details / Advanced settings */
@@ -537,19 +537,19 @@ details {
 
 summary {
   cursor: pointer;
-  color: #9C958E;
+  color: #8E9AA4;
   font-size: 13px;
   padding: 8px 0;
 }
 
 summary:hover {
-  color: #5C5650;
+  color: #5A6570;
 }
 
 .advanced-settings {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #E8E4DF;
+  border-top: 1px solid #DEE6EA;
 }
 
 .advanced-settings > div {
@@ -573,12 +573,12 @@ summary:hover {
 .sync-email {
   font-size: 13px;
   font-weight: 600;
-  color: #2D2A26;
+  color: #2D3436;
 }
 
 .sync-time {
   font-size: 11px;
-  color: #9C958E;
+  color: #8E9AA4;
 }
 
 .sync-actions {
@@ -593,7 +593,7 @@ summary:hover {
 }
 
 .sync-result.success {
-  color: #5B8A72;
+  color: #3EA87E;
 }
 
 .sync-result.error {
@@ -614,10 +614,10 @@ summary:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #D0CBC4;
+  background: #B8C8CE;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #BFB8B0;
+  background: #B4BFC8;
 }

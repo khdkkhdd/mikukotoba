@@ -43,7 +43,7 @@ Handler → Shared → Core (역방향 없음)
 ## Decisions
 
 Phase 1~3: `decisions/0011-*.md`, `decisions/0012-*.md`
-Phase 4~5: `decisions/0013-refactoring-phase4-5-completed.md`
+Phase 4~5: `decisions/0013-*.md`, `decisions/0015-*.md`, `decisions/0016-*.md`
 
 핵심 결정:
 - 단어 클릭은 렌더러에 `onWordClick` 콜백 옵션으로 구현 (렌더러 API 확장)
@@ -62,7 +62,7 @@ Phase 4~5: `decisions/0013-refactoring-phase4-5-completed.md`
 - [x] Phase 1: 공유 인프라 정비 (`192d71f`)
 - [x] Phase 2: 렌더링 통합 (`192d71f`)
 - [x] Phase 3: 판별·성능 최적화 (`47297c8`)
-- [x] Phase 4: 단어장 연동·기능 확장 (미커밋)
-- [x] Phase 5: 번역 파이프라인 고도화 (미커밋)
+- [x] Phase 4: 단어장 연동·기능 확장 (`cf6b29f`)
+- [x] Phase 5: 번역 파이프라인 고도화 (`cf6b29f`)
 
-Phase 4~5 변경사항은 아직 커밋되지 않음.
+전체 리팩토링 완료.

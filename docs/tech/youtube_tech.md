@@ -330,17 +330,20 @@ jp-helper-fetch-url 수신 ({url, id})
 | 번역 | `showTranslation` | `result.korean` |
 | 엔진 | 항상 | `formatEngineBadge(result)` (우하단, 10px 회색) |
 
-### 6.5 단어 클릭
+### 6.5 단어 클릭 → 단어장
 
-각 토큰이 `.word` span으로 감싸져 `data-token-idx` 속성을 가진다. 클릭 시:
+각 토큰이 `.word` span으로 감싸져 `data-token-idx` 속성을 가진다. 클릭 시 공유 단어장 콜백이 호출된다:
 
 ```
 .word click → stopPropagation()
-  → tokens[idx] 조회
-  → showWordPopup(token, anchorRect)
-  → .word-popup 표시 (표기, 읽기, 로마자, 기본형, 품사)
-  → 외부 클릭 시 닫힘
+  → tokens[idx]에서 surface, reading 추출
+  → .line-original의 textContent를 sentence로 전달
+  → onWordClick(surface, reading, sentence)
+  → word-click-callback.ts → vocab-click-handler.ts (dynamic import)
+  → showVocabModal() → 단어장 추가
 ```
+
+`subtitle-handler.ts`에서 `subtitleOverlay.setOnWordClick(onWordClick)`으로 공유 콜백을 연결한다. 다른 핸들러(Twitter, YouTube Page, Webpage)와 동일한 `WordClickCallback` 타입을 사용. 결정 기록: `decisions/0015-vocab-click-via-renderer-callback.md`.
 
 ### 6.6 페이드 전환
 
@@ -364,17 +367,11 @@ hide()
 ### 6.8 개선 방향
 
 **현재 한계:**
-- `setupWordClickHandlers()`가 `show()` 내부에서 호출되지 않아 단어 클릭이 실제로 동작하지 않음 (코드는 존재하나 연결 누락). 기능 명세 2.4에서는 동작하는 기능으로 기술되어 있어 불일치 상태.
-- 팝업 위치가 컨테이너 기준 절대 좌표라, 전체화면 모드에서 위치가 어긋날 수 있음.
 - 자막이 길 때 `max-width: 80%`로 잘리지만, 줄바꿈 처리가 명시적이지 않음.
 
 **개선안:**
 
-1. **단어 클릭 연결**: `show()` 메서드 끝에 `setupWordClickHandlers(result.tokens)` 호출 추가.
-
-2. **단어장 연동**: 단어 팝업에 "단어장에 추가" 버튼. 클릭 시 `chrome.runtime.sendMessage({ type: 'SAVE_WORD', ... })`.
-
-3. **전체화면 대응**: `document.fullscreenElement` 감지하여 팝업 위치 재계산.
+1. **전체화면 대응**: `document.fullscreenElement` 감지하여 모달 위치 재계산.
 
 ---
 
@@ -729,11 +726,10 @@ html[dark] .jp-yt-inline-block {
 
 - **자막 번역**: `translator.translate(text)` 호출 시 캐시를 자동 조회. 프리페치로 미리 번역된 자막은 캐시 히트로 즉시 반환.
 - **페이지 번역**: 동일 텍스트의 번역은 캐시에서 반환. SPA 네비게이션 후 같은 요소의 텍스트가 변경되지 않았으면 재번역하지 않음 (`tracker.isProcessedWithSameText`).
-- **캐시 키**: 텍스트의 해시값. 출처(YouTube/Twitter/Webpage) 구분 없이 동일 텍스트는 같은 캐시 엔트리를 공유한다.
+- **캐시 키**: `hashKey(text, source?)` — `location.hostname`을 source로 전달하여 YouTube와 다른 사이트의 번역 캐시를 분리한다.
 
 ### 한계
 
-- 같은 텍스트라도 영상 맥락(제목, 채널)에 따라 번역이 달라야 할 수 있으나, 캐시 키에 맥락이 포함되지 않음.
 - 자막 프리페치 결과가 캐시되어 있어도, 비디오 전환 시 이전 영상의 캐시가 새 영상에서 히트될 수 있음 (텍스트가 우연히 같은 경우).
 
 ---

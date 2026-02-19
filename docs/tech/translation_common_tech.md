@@ -169,20 +169,25 @@ complexityScore > userThreshold → LLM (선택된 플랫폼)
 - 기본값: 5
 - 수동 모드: Papago 전용 / LLM 전용 선택 가능
 
-### 3.4 개선 방향
+### 3.4 피드백 기반 복잡도 학습
+
+재번역 요청 패턴으로 복잡도 임계값을 세션 내 자동 조정한다:
+
+- `retranslateScores` 배열에 재번역 시점의 complexityScore 기록 (최대 20개)
+- 5개 이상 축적 시, 60% 이상이 현재 임계값 미만이면 평균값으로 임계값 하향
+- 세션 내 학습만 적용 (영구 저장 미적용 — 설정 변경은 사용자 의사 존중)
+
+### 3.5 개선 방향
 
 **현재 한계:**
 - 패턴 매칭 기반이라 false positive/negative가 존재
-- 가중치가 하드코딩되어 있어 조정이 불편
 - 실제 번역 품질과의 상관관계가 검증되지 않음
 
 **개선안:**
 
 1. **가중치 사용자 조정**: 옵션 페이지에서 각 요소의 가중치를 슬라이더로 조절 가능하게 (현재 구현에 이미 UI는 있으나 `advancedWeights`로 부분 구현). 이를 완전히 활성화.
 
-2. **피드백 기반 학습**: 사용자의 "재번역" 클릭을 Papago 품질 불만족 신호로 해석하여 해당 패턴의 복잡도 점수를 상향 조정. 로컬 스토리지에 패턴별 보정값 저장.
-
-3. **문장 구조 분석 추가**: 형태소 분석 결과를 활용하여 중문/복문 구조(접속조사 `が`, `けど`, `ので` 등 연쇄)를 복잡도 요소에 추가.
+2. **문장 구조 분석 추가**: 형태소 분석 결과를 활용하여 중문/복문 구조(접속조사 `が`, `けど`, `ので` 등 연쇄)를 복잡도 요소에 추가.
 
 ---
 
@@ -197,7 +202,7 @@ interface LLMClient {
   configure(apiKey: string): void;
   setModel(model: string): void;
   isConfigured(): boolean;
-  translate(text: string, context: TranslationContext): Promise<string>;
+  translate(text: string, context: TranslationContext, level?: LearningLevel): Promise<string>;
   testConnection(apiKey: string): Promise<boolean>;
 }
 ```
@@ -286,42 +291,26 @@ LLM 번역 시 시스템 프롬프트와 사용자 프롬프트를 조합한다:
 [지시] "한국어 번역만 출력하세요"
 ```
 
-### 5.2 학습 레벨별 프롬프트 분기
+### 5.2 학습 레벨별 프롬프트 템플릿
+
+`LEVEL_TEMPLATES` 맵으로 4단계 학습 레벨별 시스템 프롬프트를 정의한다:
 
 | 레벨 | 프롬프트 특성 |
 |------|-------------|
-| beginner | 쉬운 표현 우선, 한자어→순한국어 |
+| beginner | 쉬운 한국어, 원문 병기 적극, 문화 배경 설명 |
+| elementary | 기본 번역에 어려운 표현 병기, 경어→존댓말 |
 | intermediate | 자연스러운 번역, 관용표현 유지 |
-| advanced | 원문 뉘앙스 최대 보존, 직역에 가까움 |
+| advanced | 최소 병기, 자연스러운 의역, 경어 세분화 |
+
+`buildSystemPrompt(context, level?)` 시그니처로, 학습 레벨이 프롬프트에 반영된다. 각 LLM 클라이언트의 `translate(text, context, level?)` 호출 시 레벨을 전달.
 
 ### 5.3 개선 방향
 
-**현재 한계:**
-- 프롬프트가 문자열 연결 방식으로 구성되어 가독성/유지보수가 낮음
-- 사이트별 메타데이터가 프롬프트 빌더에 하드코딩
-
 **개선안:**
 
-1. **템플릿 기반 프롬프트**: Mustache/Handlebars 스타일의 경량 템플릿 엔진을 사용하여 프롬프트 구조를 선언적으로 정의. 단, 외부 의존성 없이 간단한 치환 로직으로 구현.
+1. **사이트 핸들러가 메타데이터 주입**: 프롬프트 빌더가 사이트별 세부사항을 알 필요 없이, 핸들러가 `TranslationContext`에 메타데이터를 채워주는 구조.
 
-2. **사이트 핸들러가 메타데이터 주입**: 프롬프트 빌더가 사이트별 세부사항을 알 필요 없이, 핸들러가 `TranslationContext`에 메타데이터를 채워주는 구조.
-
-```typescript
-interface TranslationContext {
-  source: 'youtube-subtitle' | 'youtube-page' | 'twitter' | 'webpage';
-  metadata?: {
-    videoTitle?: string;     // YouTube
-    channelName?: string;    // YouTube
-    tweetAuthor?: string;    // Twitter
-    pageUrl?: string;        // Webpage
-  };
-  previousSentences: string[];
-  glossaryEntries: GlossaryEntry[];
-  userLevel: LearningLevel;
-}
-```
-
-3. **응답 형식 강제**: LLM이 번역 외의 부가 설명을 출력하는 경우가 있음. 응답에서 번역 텍스트만 추출하는 후처리 로직 강화. (현재도 기본적인 처리는 있으나 edge case 보강 필요)
+2. **응답 형식 강제**: LLM이 번역 외의 부가 설명을 출력하는 경우가 있음. 응답에서 번역 텍스트만 추출하는 후처리 로직 강화.
 
 ---
 
@@ -391,20 +380,28 @@ ContextManager {
 
 **캐시 키 생성**: 텍스트를 SHA-like 해시(현재는 간단한 문자열 해시)로 변환.
 
-### 7.3 개선 방향
+### 7.3 컨텍스트-인식 캐시 키
+
+`hashKey(text, source?)` 형태로, 출처(hostname)를 캐시 키에 선택적으로 포함한다:
+
+- `source`가 있으면 `${source}:${text}`를 해시
+- `source`가 없으면 기존 동작과 동일 (하위 호환)
+- Content script에서 `location.hostname`을 source로 전달
+- 메모리 캐시 키도 동일 패턴: `memoryCacheKey(text, source?)`
+
+같은 텍스트라도 YouTube/Twitter/일반 웹에서 번역 톤이 다를 수 있으므로 출처별로 캐시를 분리.
+
+### 7.4 개선 방향
 
 **현재 한계:**
-- 같은 텍스트라도 컨텍스트가 다르면 번역이 달라야 하는데, 캐시 키에 컨텍스트가 포함되지 않음
 - L2 캐시의 LRU 퇴거가 인덱스 전체를 읽어와 정렬하는 방식이라 1000개 이상 시 느림
 - "재번역" 결과가 캐시를 덮어쓰는데, 이전 번역으로 돌아갈 수 없음
 
 **개선안:**
 
-1. **컨텍스트-인식 캐시 키**: `hash(text + source)` 형태로, 최소한 출처(YouTube/Twitter/Webpage)를 키에 포함. 같은 텍스트라도 출처에 따라 번역 톤이 다를 수 있음.
+1. **분할 인덱스**: 날짜별/사이트별로 인덱스를 분할하여 퇴거 연산 범위를 제한.
 
-2. **분할 인덱스**: 날짜별/사이트별로 인덱스를 분할하여 퇴거 연산 범위를 제한.
-
-3. **재번역 이력**: 최대 2개의 번역 결과를 저장하여 "이전 번역 / 현재 번역" 토글 가능.
+2. **재번역 이력**: 최대 2개의 번역 결과를 저장하여 "이전 번역 / 현재 번역" 토글 가능.
 
 ---
 
@@ -456,7 +453,7 @@ interface GlossaryEntry {
 
 2. **카테고리 관리**: 용어를 카테고리(인사말, 문화, 인터넷 용어 등)로 분류하여 사용자가 카테고리 단위로 활성화/비활성화.
 
-3. **단어장 연동**: 사용자가 단어장에 추가한 단어를 자동으로 용어집에 반영하여 일관된 번역 유도. (opt-in 방식)
+3. **단어장 연동**: 단어장에 추가된 단어는 Service Worker의 `addVocabToGlossary()`를 통해 용어집에 자동 반영된다. `note: '단어장에서 자동 추가'`로 출처를 표시하며, 동일 japanese 키가 이미 존재하면 스킵한다.
 
 ---
 
@@ -515,13 +512,18 @@ setFetchBackend((url, options) => {
 });
 ```
 
-### 10.2 개선 방향
+### 10.2 동시 요청 제어 및 중복 제거
 
-1. **요청 큐잉**: 동시 번역 요청이 많은 경우 (인라인 모드에서 페이지 전체 스캔), API rate limit을 피하기 위한 요청 큐. 최대 동시 요청 수 제한 (Papago: 3, LLM: 2).
+Translator에서 요청 동시성과 중복을 관리한다:
 
-2. **요청 병합(Batching)**: 짧은 시간 내 들어온 짧은 텍스트를 묶어서 하나의 LLM 요청으로 처리. 예: 트위터의 여러 짧은 트윗을 배치로 번역.
+- **동시 요청 제한**: `maxConcurrent = 3`, FIFO 큐로 초과 요청 대기
+- **In-flight dedup**: `inflight` Map<normalizedText, Promise>으로 동일 텍스트의 중복 요청 병합. skipCache(재번역) 요청은 dedup 대상에서 제외. 완료 시 Map에서 자동 제거.
 
-3. **스트리밍 응답**: LLM의 스트리밍 API를 활용하여 긴 텍스트의 번역 결과를 점진적으로 표시. Service Worker 프록시를 통한 스트리밍은 기술적 한계가 있어, `chrome.runtime.connect()` 포트 기반 통신으로 전환 필요.
+### 10.3 개선 방향
+
+1. **요청 병합(Batching)**: 짧은 시간 내 들어온 짧은 텍스트를 묶어서 하나의 LLM 요청으로 처리. 예: 트위터의 여러 짧은 트윗을 배치로 번역.
+
+2. **스트리밍 응답**: LLM의 스트리밍 API를 활용하여 긴 텍스트의 번역 결과를 점진적으로 표시. Service Worker 프록시를 통한 스트리밍은 기술적 한계가 있어, `chrome.runtime.connect()` 포트 기반 통신으로 전환 필요.
 
 ---
 

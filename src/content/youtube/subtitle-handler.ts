@@ -5,6 +5,7 @@ import { translator } from '@/core/translator';
 import { VideoObserver } from './video-observer';
 import { SubtitleExtractor } from './subtitle-extractor';
 import { SubtitleOverlay } from './subtitle-overlay';
+import { onWordClick } from '@/content/vocab/word-click-callback';
 import { createLogger } from '@/core/logger';
 
 const log = createLogger('YouTube:Subtitle');
@@ -45,6 +46,7 @@ export class YouTubeSubtitleHandler implements SiteHandler {
   start(): void {
     log.info('YouTube subtitle handler starting');
     this.subtitleOverlay = new SubtitleOverlay(this.settings);
+    this.subtitleOverlay.setOnWordClick(onWordClick);
 
     this.videoObserver = new VideoObserver((meta) => {
       // New video detected — clear stale overlay immediately

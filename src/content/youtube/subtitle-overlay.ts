@@ -1,4 +1,5 @@
 import type { TranslationResult, UserSettings, MorphemeToken } from '@/types';
+import type { WordClickCallback } from '@/content/shared/renderers/ruby-injector';
 import { tokensToDetailedFuriganaHTML, tokensToRomaji } from '@/core/analyzer/reading-converter';
 import { formatEngineBadge } from '@/content/shared/renderers/engine-badge';
 
@@ -11,7 +12,7 @@ export class SubtitleOverlay {
   private shadowRoot: ShadowRoot | null = null;
   private overlay: HTMLDivElement | null = null;
   private settings: UserSettings;
-  private onWordClick: ((token: MorphemeToken) => void) | null = null;
+  private onWordClick: WordClickCallback | null = null;
   private fadeTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(settings: UserSettings) {
@@ -61,7 +62,7 @@ export class SubtitleOverlay {
     this.showYouTubeCaptions();
   }
 
-  setOnWordClick(handler: (token: MorphemeToken) => void): void {
+  setOnWordClick(handler: WordClickCallback): void {
     this.onWordClick = handler;
   }
 
@@ -122,6 +123,9 @@ export class SubtitleOverlay {
     engineBadge.textContent = formatEngineBadge(result);
     this.overlay.appendChild(engineBadge);
 
+    // Wire up word click handlers
+    this.setupWordClickHandlers(result.tokens);
+
     // Fade in
     requestAnimationFrame(() => {
       if (this.overlay) {
@@ -163,13 +167,14 @@ export class SubtitleOverlay {
   private setupWordClickHandlers(tokens: MorphemeToken[]): void {
     if (!this.overlay || !this.onWordClick) return;
 
+    const sentence = this.overlay.querySelector('.line-original')?.textContent?.trim() || '';
     const wordSpans = this.overlay.querySelectorAll('.word');
     wordSpans.forEach((span) => {
       span.addEventListener('click', (e) => {
         e.stopPropagation();
         const idx = parseInt((span as HTMLElement).dataset.tokenIdx || '0', 10);
         if (tokens[idx] && this.onWordClick) {
-          this.onWordClick(tokens[idx]);
+          this.onWordClick(tokens[idx].surface, tokens[idx].reading, sentence);
         }
       });
     });

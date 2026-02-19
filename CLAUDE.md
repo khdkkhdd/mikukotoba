@@ -25,8 +25,6 @@ Decisions go in `decisions/` using the numbered format (NNNN-topic.md).
 
 Task context lives in `context.md` at repo root.
 
-## Refactoring
+## Architecture
 
-Currently in refactoring phase (Phase 4~5 remaining). Read these in order:
-1. `context.md` — current progress and remaining tasks
-2. `docs/refactoring-guide-phase4-5.md` — detailed guide for Phase 4~5 with file references, patterns, and work rules
+Three-layer dependency: Handler → Shared → Core (no reverse). See `context.md` for architecture details, storage keys, and key patterns.

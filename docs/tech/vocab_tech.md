@@ -146,37 +146,32 @@ jp_vocab_2026-02-18         [ VocabEntry, VocabEntry, ... ]
 
 **개선안:** 인덱스 갱신을 직렬화 큐로 감싸거나, `chrome.storage.local.get` + `set`을 단일 트랜잭션으로 묶는 헬퍼 함수를 사용.
 
-### 2.2 개선 방향
+### 2.2 검색 전용 플랫 인덱스
 
-**검색 성능:**
-현재 검색은 모든 날짜 파티션을 로드하여 메모리에서 필터링한다. 단어 수가 수백 개를 넘으면 성능 저하가 우려된다.
+검색 성능을 위해 `jp_vocab_search_flat` 키에 검색 필드만 포함한 경량 배열을 유지한다:
 
-**개선안 1 — 역인덱스 도입:**
-```
-jp_vocab_search_index: {
-  "食べる": ["2026-02-19_abc123"],
-  "たべる": ["2026-02-19_abc123"],
-  "taberu": ["2026-02-19_abc123"],
-  "먹다":   ["2026-02-19_abc123"],
-  ...
-}
-```
-- 단어, 읽기, 로마자, 뜻의 토큰을 역인덱스에 등록
-- 검색 시 역인덱스에서 매칭 ID를 찾고, 해당 날짜 파티션만 로드
-- 트레이드오프: 추가/삭제 시 인덱스 갱신 비용 증가
-
-**개선안 2 — 검색 전용 경량 배열:**
 ```
 jp_vocab_search_flat: [
-  { id, date, word, reading, romaji, meaning },  // 검색 필드만 포함
+  { id, date, word, reading, romaji, meaning, note },  // SearchEntry
   ...
 ]
 ```
-- 전체 항목의 검색 가능 필드만 모은 플랫 배열
-- 검색 시 이 배열 하나만 로드하여 필터링 후, 매칭 항목의 전체 데이터는 날짜 파티션에서 로드
-- 트레이드오프: 항목 수 × 검색 필드 크기만큼 추가 저장 공간 소모
 
-**권장: 개선안 2** — 구현 단순성과 검색 성능의 균형이 가장 좋다. 1000개 항목 기준으로 경량 배열은 ~100KB 이내로 단일 `chrome.storage.local.get` 호출로 충분히 처리 가능.
+- 검색 시: 플랫 배열 1회 로드 → 매칭 ID 추출 → 해당 날짜 파티션만 로드
+- CRUD 시: 플랫 인덱스 동기 갱신 (addEntry/updateEntry/deleteEntry)
+- `rebuildSearchIndex()`: 기존 데이터 마이그레이션용 (onInstalled에서 호출)
+- 1000개 항목 기준 ~100KB, 단일 `chrome.storage.local.get`으로 충분
+
+**갱신된 연산 복잡도:**
+
+| 연산 | 스토리지 접근 | 비고 |
+|------|-------------|------|
+| 추가 | read index + read date + write date + write index + read/write flat | 6회 |
+| 삭제 | read date + write date + read index + write index + read/write flat | 6회 |
+| 수정 | read date + write date + read/write flat | 4회 |
+| 검색 | read flat + read M dates | 1+M회 (M=매칭 날짜 수, 대부분 ≪ N) |
+
+역인덱스(토큰별 → ID 목록)도 검토했으나, CRUD 시 토큰 분리·인덱스 갱신 복잡성이 높고 부분 일치 검색에 불리하여 채택하지 않았다. 결정 기록: `decisions/0016-search-flat-index-over-inverted-index.md`.
 
 **중복 방지:**
 현재 같은 단어를 여러 번 추가할 수 있다. 의도적 설계(같은 단어를 다른 문맥에서 만났을 때 별도 기록)일 수 있으나, 사용자에게 "이미 등록된 단어입니다" 알림은 제공하는 것이 좋다.
@@ -427,16 +422,21 @@ modal.addEventListener('keydown', (e) => {
 - 형식: `VocabEntry[]` 배열 (pretty-print, 2-space indent)
 - Blob → Object URL → `<a>` 클릭 → URL 해제
 
-### 5.8 개선 방향
+### 5.8 가져오기(Import) 기능
 
-1. **가져오기(Import) 기능:** JSON 파일을 업로드하여 단어장을 복원/병합. 기기 간 이동 또는 백업 복원 시 필수.
+JSON 파일을 업로드하여 단어장을 복원/병합한다:
 
-   ```
-   파일 선택 → JSON 파싱 → 중복 감지 (id 또는 word+dateAdded 기준)
-     → 새 항목만 추가 / 전체 덮어쓰기 선택
-   ```
+```
+파일 선택 → JSON 파싱 → VocabStorage.importEntries()
+  → ID 기반 중복 감지 → 날짜별 파티션 병합 → 검색 인덱스 자동 갱신
+```
 
-2. **정렬 옵션:** 현재는 날짜 내림차순(최신 먼저) 고정. 추가 옵션:
+- `VOCAB_IMPORT` 메시지 타입으로 Service Worker에서 처리
+- vocabulary.html에 "가져오기" 버튼 제공
+
+### 5.9 개선 방향
+
+1. **정렬 옵션:** 현재는 날짜 내림차순(최신 먼저) 고정. 추가 옵션:
    - 가나다순 (word)
    - 뜻 가나다순 (meaning)
    - 최근 추가순 (현재 기본값)
@@ -509,6 +509,7 @@ Service Worker                     Content Script
 | `VOCAB_UPDATE` | `VocabEntry` | `{ success: boolean }` |
 | `VOCAB_DELETE` | `{ id, date }` | `{ success: boolean }` |
 | `VOCAB_EXPORT` | — | `{ payload: VocabEntry[] }` |
+| `VOCAB_IMPORT` | `{ entries: VocabEntry[] }` | `{ payload: { imported: number } }` |
 
 ### 6.3 개선 방향
 
@@ -539,18 +540,20 @@ Service Worker                     Content Script
 - Kuromoji 로드 실패: "형태소 분석기를 초기화할 수 없습니다" 토스트
 - API 키 미설정: 읽기/로마자는 채우되, 뜻 필드를 빈 상태로 모달 표시 + "API 키를 설정하면 자동 번역됩니다" 안내
 
-### 7.3 용어집 연동 (개선안)
+### 7.3 용어집 자동 연동
 
-번역 공통 기술 명세에서 언급한 "단어장 → 용어집 자동 반영":
+단어장에 항목이 추가되면 용어집에 자동 반영된다:
 
 ```
-단어장에 항목 추가
-  → 용어집에 { japanese: entry.word, korean: entry.meaning } 자동 등록
+단어장에 항목 추가 (VOCAB_SAVE)
+  → Service Worker의 addVocabToGlossary(japanese, korean)
+  → chrome.storage.local에서 jp_glossary_custom 직접 접근
+  → 중복 체크 (동일 japanese 키 존재 시 스킵)
+  → { japanese, korean, note: '단어장에서 자동 추가' } 항목 추가
   → 이후 번역 시 이 단어가 일관되게 번역됨
 ```
 
-- opt-in 설정: "단어장 단어를 용어집에 자동 추가" 체크박스
-- 용어집에서 자동 추가된 항목은 별도 표시 (출처: 단어장)
+- GlossaryManager 인스턴스 없이 storage 직접 접근 (Service Worker 컨텍스트)
 - 단어장에서 삭제해도 용어집에는 남음 (수동 삭제 필요)
 
 ---

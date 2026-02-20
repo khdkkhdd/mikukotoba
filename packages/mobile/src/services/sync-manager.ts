@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { AppState, type NativeEventSubscription } from 'react-native';
-import { pullFromDrive, pushToDrive, pullFsrsState, pushFsrsState, pushReviewLogs, pullReviewLogs } from './sync';
+import { createSyncContextFromDb, pullFromDrive, pushToDrive, pullFsrsPartitions, pushFsrsPartitions, pushReviewLogPartitions, pullReviewLogPartitions } from './sync';
+import { commitSyncMeta } from '@mikukotoba/shared';
 import { getAccessToken } from './drive-auth';
 import { useVocabStore } from '../stores/vocab-store';
 
@@ -8,8 +9,8 @@ const DEBOUNCE_MS = 30_000; // 30초
 
 // 모듈 상태
 let database: SQLiteDatabase | null = null;
-let dirtyFsrs = false;
-let dirtyReviewLog = false;
+let dirtyFsrsVocabIds = new Set<string>();
+let dirtyReviewMonths = new Set<string>();
 let dirtyVocabDates = new Set<string>();
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let isFlushing = false;
@@ -22,13 +23,13 @@ function startDebounce() {
   }, DEBOUNCE_MS);
 }
 
-export function markFsrsDirty() {
-  dirtyFsrs = true;
+export function markFsrsDirty(vocabId: string) {
+  dirtyFsrsVocabIds.add(vocabId);
   startDebounce();
 }
 
-export function markReviewLogDirty() {
-  dirtyReviewLog = true;
+export function markReviewLogDirty(month: string) {
+  dirtyReviewMonths.add(month);
   startDebounce();
 }
 
@@ -50,14 +51,17 @@ export async function flush(): Promise<void> {
   }
 
   try {
-    if (dirtyFsrs) {
-      await pushFsrsState(database);
-      dirtyFsrs = false;
+    // flush는 경량 경로 — listFiles 호출하지 않음, ctx 미사용
+    if (dirtyFsrsVocabIds.size > 0) {
+      const ids = [...dirtyFsrsVocabIds];
+      await pushFsrsPartitions(database, ids);
+      dirtyFsrsVocabIds.clear();
     }
 
-    if (dirtyReviewLog) {
-      await pushReviewLogs(database);
-      dirtyReviewLog = false;
+    if (dirtyReviewMonths.size > 0) {
+      const months = [...dirtyReviewMonths];
+      await pushReviewLogPartitions(database, months);
+      dirtyReviewMonths.clear();
     }
 
     if (dirtyVocabDates.size > 0) {
@@ -78,25 +82,42 @@ export async function fullSync(db: SQLiteDatabase): Promise<{ vocabPulled: numbe
   database = db;
   await flush();
 
-  // pull
-  const vocabResult = await pullFromDrive(db);
-  const fsrsPulled = await pullFsrsState(db);
-  await pullReviewLogs(db);
+  // SyncContext 생성: listFiles 1회 + meta 1회
+  const result = await createSyncContextFromDb(db);
+  if (!result) {
+    return { vocabPulled: 0, vocabPushed: 0, fsrsPulled: false };
+  }
+  const { ctx } = result;
 
-  // push all local dates (merge-before-push로 Drive 데이터 보존)
-  const allDates = await getAllVocabDates(db);
-  const vocabPushed = await pushToDrive(db, allDates);
-  await pushFsrsState(db);
-  await pushReviewLogs(db);
+  // 3종 pull 병렬
+  const [vocabResult, fsrsPulled] = await Promise.all([
+    pullFromDrive(db, ctx),
+    pullFsrsPartitions(db, ctx),
+    pullReviewLogPartitions(db, ctx),
+  ]);
+
+  // push dirty partitions (ctx 공유)
+  let vocabPushed = 0;
+  if (dirtyVocabDates.size > 0) {
+    const dates = [...dirtyVocabDates];
+    vocabPushed = await pushToDrive(db, dates, ctx);
+    dirtyVocabDates.clear();
+  }
+  if (dirtyFsrsVocabIds.size > 0) {
+    const ids = [...dirtyFsrsVocabIds];
+    await pushFsrsPartitions(db, ids, ctx);
+    dirtyFsrsVocabIds.clear();
+  }
+  if (dirtyReviewMonths.size > 0) {
+    const months = [...dirtyReviewMonths];
+    await pushReviewLogPartitions(db, months, ctx);
+    dirtyReviewMonths.clear();
+  }
+
+  // 재읽기 + 머지 + 1회 쓰기
+  await commitSyncMeta(ctx);
 
   return { vocabPulled: vocabResult.pulled, vocabPushed, fsrsPulled };
-}
-
-async function getAllVocabDates(db: SQLiteDatabase): Promise<string[]> {
-  const rows = await db.getAllAsync<{ date: string }>(
-    'SELECT DISTINCT date_added as date FROM vocab'
-  );
-  return rows.map((r) => r.date);
 }
 
 async function handleAppStateChange(nextState: string) {
@@ -105,13 +126,17 @@ async function handleAppStateChange(nextState: string) {
   if (nextState === 'background' || nextState === 'inactive') {
     await flush();
   } else if (nextState === 'active') {
-    const token = await getAccessToken();
-    if (!token) return;
-
     try {
-      const vocabResult = await pullFromDrive(database);
-      await pullFsrsState(database);
-      await pullReviewLogs(database);
+      // SyncContext 생성 → 3종 pull 병렬
+      const result = await createSyncContextFromDb(database);
+      if (!result) return;
+      const { ctx } = result;
+
+      const [vocabResult] = await Promise.all([
+        pullFromDrive(database, ctx),
+        pullFsrsPartitions(database, ctx),
+        pullReviewLogPartitions(database, ctx),
+      ]);
 
       if (vocabResult.changed) {
         await useVocabStore.getState().refresh(database);
@@ -135,8 +160,8 @@ export function destroySyncManager() {
   appStateSubscription?.remove();
   appStateSubscription = null;
   database = null;
-  dirtyFsrs = false;
-  dirtyReviewLog = false;
+  dirtyFsrsVocabIds.clear();
+  dirtyReviewMonths.clear();
   dirtyVocabDates.clear();
   isFlushing = false;
 }

@@ -1,62 +1,52 @@
 # Goal
 
-동기화 카운팅 정확성: pull/push 시 파티션 수나 전체 엔트리 수가 아닌, 실제 변경된 엔트리 수만 표시.
+Google Drive 동기화 최적화: 순차 HTTP ~80회(~30초+) → 병렬 ~40회(~3-5초).
+
+3가지 축: (1) listFiles 일괄 조회 (2) 파티션 병렬화 (3) 메타 읽기/쓰기 통합.
 
 # Research
 
-## 동기화 아키텍처
+## 병목 분석
 
-### mergeEntries 인자 순서 규칙
-- `mergeEntries(A, B, tombstones)`: A가 먼저 map에, B는 timestamp이 더 클 때만 덮어씀 → **A 우선 (equal timestamp에서 A 승리)**
-- Pull: `mergeEntries(remote, local, tombstones)` → remote 우선
-- Push: `mergeEntries(local, remote, tombstones)` → local 우선
+- 파티션마다 `findFileByName` 순차 호출 → ~36회 HTTP
+- 3종(vocab/FSRS/review) pull/push 각각 meta 읽기/쓰기 → ~6회 HTTP
+- API 호출이 압도적 병목, 내부 merge 연산은 무시할 수준
 
-### 삭제 처리
-- tombstone 기반: `deletedEntries[entryId] = Date.now()`
-- mergeEntries에서 tombstone이 있는 엔트리는 양쪽 모두 제외
-- tombstone은 Drive 메타데이터에 기록되어 양방향 전파
-- 충돌 시 delete가 edit보다 우선 (tombstone이 timestamp 비교를 선행)
-- TTL 30일 후 tombstone 정리
+## 핵심 이슈
 
-### 카운팅 (수정 완료)
-- `countChangedEntries(before, after)`: 추가 + 수정(timestamp 변경) + 삭제(before에만 있는 것) 카운트
-- Pull: `countChangedEntries(localEntries, merged)` — 로컬 대비 변경분
-- Push: `countChangedEntries(remoteEntries, merged)` — Drive 대비 변경분
-
-## 동기화 시나리오 검증 결과
-
-| 시나리오 | 동기화 | 카운트 |
-|----------|--------|--------|
-| 추가 | 정상 | 정상 |
-| 수정 | 정상 (last-write-wins) | 정상 |
-| 삭제 | 정상 (tombstone 전파) | 정상 |
-| 충돌: 양쪽 수정 | 최신 timestamp 승 | 정상 |
-| 충돌: 삭제 vs 수정 | 삭제 승리 | 정상 |
-
-## 관련 파일
-
-- `packages/shared/src/sync-core.ts` — mergeEntries, countChangedEntries
-- `packages/extension/src/core/drive-sync.ts` — pull, pushPartitionImmediate, pushAll
-- `packages/mobile/src/services/sync.ts` — pullFromDrive, pushToDrive
-- `packages/mobile/src/services/sync-manager.ts` — fullSync
+- **listFiles 페이지네이션 미지원**: pageSize=100, nextPageToken 무시 → 3개월 사용 시 100파일 초과
+- **commitSyncMeta 재읽기+머지 필수**: stale version overwrite 방지를 위해 remote meta 재읽기 후 Math.max 머지
+- **flush에서 listFiles 불필요**: 1-2개 파티션 push에 전체 listFiles는 과잉
+- **SyncContext 분리**: sync-core.ts는 순수 함수만 유지, 새 파일 sync-context.ts로 분리
 
 # Plan
 
-## Decisions
+## 아키텍처
 
-- countChangedEntries를 shared에 배치하여 양쪽에서 공유
-- pushPartitionImmediate 반환 타입을 void → number로 변경하여 변경 엔트리 수 반환
-- 삭제 카운팅: before에는 있지만 after에 없는 엔트리도 changed에 포함
-- 모바일 fullSync는 여전히 allDates를 push하지만 카운트는 실제 변경분만 표시
+- `SyncContext`: token + fileIdMap(listFiles 1회) + remoteMeta(읽기 1회) + versionPatches(push 누적)
+- `createSyncContext()` → fullSync/pull 시작 시 1회 생성, 모든 pull/push가 공유
+- `commitSyncMeta()` → push 완료 후 재읽기 + Math.max 머지 + 1회 쓰기
+- flush 경량 경로: ctx 미사용, 기존 ensureDriveFileId 캐시 활용
 
-## Steps
+## 수정 파일
 
-완료.
+| 파일 | 변경 |
+|------|------|
+| `shared/src/drive-api.ts` | listFiles nextPageToken 페이지네이션 |
+| `shared/src/sync-core.ts` | buildFileIdMap, resolveFileId, parallelMap 헬퍼 |
+| `shared/src/sync-context.ts` | 신규 — SyncContext, createSyncContext, commitSyncMeta |
+| `shared/src/index.ts` | 새 export 추가 |
+| `mobile/src/services/sync.ts` | pull/push에 ctx 파라미터 + parallelMap 병렬화 |
+| `mobile/src/services/sync-manager.ts` | fullSync ctx 공유 + 3종 pull Promise.all |
+| `extension/src/core/drive-sync.ts` | pull/pushAll ctx 기반 + pushPartitionImmediate meta+index 병렬 쓰기 |
 
 # Progress
 
-- [x] `countChangedEntries` 헬퍼 추가 (shared/sync-core.ts)
-- [x] 모바일 pull/push 카운팅 수정 (sync.ts)
-- [x] 확장프로그램 pull/push 카운팅 수정 (drive-sync.ts, pushPartitionImmediate → number 반환)
-- [x] 삭제 카운팅 추가 (before에만 있는 엔트리도 카운트)
-- [x] 양쪽 빌드/타입체크 통과
+- [x] `drive-api.ts` — listFiles 페이지네이션 (nextPageToken 루프)
+- [x] `sync-core.ts` — buildFileIdMap, resolveFileId, parallelMap 추가
+- [x] `sync-context.ts` — SyncContext 타입, createSyncContext, commitSyncMeta 구현
+- [x] `index.ts` — 새 export 추가
+- [x] `mobile/sync.ts` — 모든 pull/push에 optional ctx 파라미터, parallelMap 병렬 fetch/push
+- [x] `mobile/sync-manager.ts` — fullSync: ctx 생성 → 3종 pull 병렬 → push → commitSyncMeta 1회
+- [x] `extension/drive-sync.ts` — pull/pushAll: createSyncContext + parallelMap, pushPartitionImmediate: meta+index Promise.all
+- [x] 빌드 검증: extension build + mobile tsc --noEmit 성공

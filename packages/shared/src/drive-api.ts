@@ -9,22 +9,31 @@ interface DriveFile {
 
 export const DriveAPI = {
   async listFiles(token: string): Promise<DriveFile[]> {
-    const params = new URLSearchParams({
-      spaces: 'appDataFolder',
-      fields: 'files(id,name,modifiedTime)',
-      pageSize: '100',
-    });
+    const allFiles: DriveFile[] = [];
+    let pageToken: string | undefined;
 
-    const resp = await fetch(`${DRIVE_API}/files?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    do {
+      const params = new URLSearchParams({
+        spaces: 'appDataFolder',
+        fields: 'nextPageToken,files(id,name,modifiedTime)',
+        pageSize: '100',
+      });
+      if (pageToken) params.set('pageToken', pageToken);
 
-    if (!resp.ok) {
-      throw new Error(`Drive listFiles failed: ${resp.status}`);
-    }
+      const resp = await fetch(`${DRIVE_API}/files?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    const data = await resp.json() as { files?: DriveFile[] };
-    return data.files || [];
+      if (!resp.ok) {
+        throw new Error(`Drive listFiles failed: ${resp.status}`);
+      }
+
+      const data = await resp.json() as { files?: DriveFile[]; nextPageToken?: string };
+      if (data.files) allFiles.push(...data.files);
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    return allFiles;
   },
 
   async getFile<T = unknown>(token: string, fileId: string): Promise<T> {

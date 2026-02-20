@@ -11,6 +11,14 @@ export const DRIVE_INDEX_FILE = 'vocab_index.json';
 export const DRIVE_FSRS_FILE = 'fsrs_state.json';
 export const DRIVE_REVIEW_LOG_FILE = 'review_logs.json';
 
+export function driveFsrsPartitionName(month: string): string {
+  return `fsrs_${month}.json`;
+}
+
+export function driveReviewPartitionName(month: string): string {
+  return `reviews_${month}.json`;
+}
+
 /**
  * Merge local and remote entry lists.
  * Uses entry-level timestamp comparison, respects tombstones.
@@ -130,6 +138,58 @@ export function countChangedEntries(
     if (!afterIds.has(id)) changed++;
   }
   return changed;
+}
+
+/**
+ * Build a fileName → fileId map from a listFiles result.
+ */
+export function buildFileIdMap(files: { id: string; name: string }[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const f of files) {
+    map.set(f.name, f.id);
+  }
+  return map;
+}
+
+/**
+ * Resolve a Drive file ID using the fileIdMap (from listFiles) first,
+ * falling back to localDriveFileIds cache. Returns null if not found.
+ */
+export function resolveFileId(
+  fileIdMap: Map<string, string>,
+  localDriveFileIds: Record<string, string>,
+  fileName: string
+): string | null {
+  return fileIdMap.get(fileName) ?? localDriveFileIds[fileName] ?? null;
+}
+
+/**
+ * Run async functions in parallel with concurrency limit.
+ * Returns PromiseSettledResult for each item.
+ */
+export async function parallelMap<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency = 5
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+
+  async function worker() {
+    while (next < items.length) {
+      const idx = next++;
+      try {
+        const value = await fn(items[idx]);
+        results[idx] = { status: 'fulfilled', value };
+      } catch (reason) {
+        results[idx] = { status: 'rejected', reason };
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 /**

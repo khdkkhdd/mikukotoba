@@ -1,5 +1,5 @@
 import type { SyncMetadata, SyncResult, VocabEntry, VocabStorageIndex } from '@/types';
-import type { DrivePartitionContent, DriveSyncMeta } from '@mikukotoba/shared';
+import type { DrivePartitionContent, DriveSyncMeta, SyncContext } from '@mikukotoba/shared';
 import { DriveAuth } from './drive-auth';
 import { DriveAPI } from '@mikukotoba/shared';
 import {
@@ -7,6 +7,10 @@ import {
   countChangedEntries,
   cleanTombstones,
   drivePartitionName,
+  resolveFileId,
+  parallelMap,
+  createSyncContext,
+  commitSyncMeta,
   DRIVE_META_FILE,
   DRIVE_INDEX_FILE,
 } from '@mikukotoba/shared';
@@ -104,15 +108,36 @@ export const DriveSync = {
   getMetadata: getLocalMeta,
 
   async pushAll(): Promise<number> {
+    const token = await DriveAuth.getValidToken();
+    if (!token) return 0;
+
+    const meta = await getLocalMeta();
+    const ctx = await createSyncContext(token, meta.driveFileIds);
+    const remoteMeta = ctx.remoteMeta;
+    await saveLocalMeta(meta); // driveFileIds 캐시 업데이트
+
     const index = await getLocalIndex();
+    const datesToPush = index.dates.filter(date => {
+      const localV = meta.partitionVersions[date] || 0;
+      const remoteV = remoteMeta.partitionVersions[date] || 0;
+      return localV > remoteV || (localV === 0 && remoteV === 0);
+    });
+
     let pushed = 0;
-    for (const date of index.dates) {
-      try {
-        pushed += await pushPartitionImmediate(date);
-      } catch {
-        // Best effort per partition
+    // 병렬 push
+    const results = await parallelMap(datesToPush, async (date) => {
+      return pushPartitionCore(token, date, meta, ctx);
+    });
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        pushed += result.value;
       }
     }
+
+    // commitSyncMeta 1회
+    await commitSyncMeta(ctx);
+    await saveLocalMeta(meta);
     return pushed;
   },
 
@@ -148,18 +173,11 @@ export const DriveSync = {
     let pulled = 0;
     let pushed = 0;
     let changed = false;
-    let needMetaPush = false;
 
-    let remoteMeta: DriveSyncMeta = { partitionVersions: {}, deletedEntries: {} };
-    const remoteMetaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
-
-    if (remoteMetaFileId) {
-      try {
-        remoteMeta = await DriveAPI.getFile<DriveSyncMeta>(token, remoteMetaFileId);
-      } catch {
-        // First sync or corrupted — start fresh
-      }
-    }
+    // SyncContext: listFiles 1회 + meta 1회
+    const ctx = await createSyncContext(token, meta.driveFileIds);
+    const remoteMeta = ctx.remoteMeta;
+    await saveLocalMeta(meta); // driveFileIds 캐시 업데이트
 
     for (const [entryId, remoteTs] of Object.entries(remoteMeta.deletedEntries || {})) {
       const localTs = meta.deletedEntries[entryId];
@@ -175,91 +193,94 @@ export const DriveSync = {
       ...Object.keys(remoteMeta.partitionVersions).filter(isValidDate),
     ]);
 
+    // 날짜를 카테고리별로 분류
+    const pullDates: string[] = [];
+    const pushDates: string[] = [];
+    const initDates: string[] = [];
+
     for (const date of allDates) {
       const localVersion = meta.partitionVersions[date] || 0;
       const remoteVersion = remoteMeta.partitionVersions[date] || 0;
 
       if (remoteVersion > localVersion) {
-        const fileName = drivePartitionName(date);
-        const fileId = await ensureDriveFileId(token, meta, fileName);
-        if (fileId) {
-          try {
-            const remote = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
-            const localEntries = await getLocalEntries(date);
-
-            // Pull: remote 우선 (인자 순서 반전 → equal timestamp에서 remote 승리)
-            const merged = mergeEntries(
-              remote.entries,
-              localEntries,
-              meta.deletedEntries
-            );
-
-            const pullChanges = countChangedEntries(localEntries, merged);
-            await saveLocalEntries(date, merged);
-            pulled += pullChanges;
-            if (pullChanges > 0) changed = true;
-
-            // Push-back: 로컬 엔트리가 merge에 반영됐으면 Drive에도 반영
-            if (localEntries.length > 0) {
-              const pushChanges = countChangedEntries(remote.entries, merged);
-              const version = Date.now();
-              await DriveAPI.updateFile(token, fileId, { date, entries: merged, version });
-              meta.partitionVersions[date] = version;
-              pushed += pushChanges;
-              needMetaPush = true;
-            } else {
-              meta.partitionVersions[date] = remoteVersion;
-            }
-          } catch {
-            // Skip this partition on error
-          }
-        }
+        pullDates.push(date);
       } else if (localVersion > remoteVersion) {
-        pushed += await pushPartitionImmediate(date);
-        // pushPartitionImmediate가 meta를 별도로 저장하므로 최신 상태 반영
-        meta = await getLocalMeta();
+        pushDates.push(date);
       } else if (localVersion === 0 && remoteVersion === 0) {
-        // Never synced — push if local entries exist
-        const localEntries = await getLocalEntries(date);
-        if (localEntries.length > 0) {
-          pushed += await pushPartitionImmediate(date);
-          meta = await getLocalMeta();
-        }
+        initDates.push(date);
       }
     }
 
-    // Pull-merge push-back 후 Drive 메타 업데이트
-    if (needMetaPush) {
-      const metaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
+    // pull 파티션 병렬 fetch
+    const pullResults = await parallelMap(pullDates, async (date) => {
+      const fileName = drivePartitionName(date);
+      const fileId = resolveFileId(ctx.fileIdMap, ctx.localDriveFileIds, fileName);
+      if (!fileId) return null;
 
-      // Remote와 머지 (max version per date)
-      let remoteVersions: Record<string, number> = {};
-      let remoteDeleted: Record<string, number> = {};
-      if (metaFileId) {
-        try {
-          const existing = await DriveAPI.getFile<DriveSyncMeta>(token, metaFileId);
-          remoteVersions = existing.partitionVersions || {};
-          remoteDeleted = existing.deletedEntries || {};
-        } catch { /* ignore */ }
+      const remote = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
+      return { date, remote, fileId };
+    });
+
+    // pull 결과 순차 처리
+    for (const result of pullResults) {
+      if (result.status !== 'fulfilled' || !result.value) continue;
+      const { date, remote, fileId } = result.value;
+      const remoteVersion = remoteMeta.partitionVersions[date] || 0;
+
+      try {
+        const localEntries = await getLocalEntries(date);
+        const merged = mergeEntries(remote.entries, localEntries, meta.deletedEntries);
+
+        const pullChanges = countChangedEntries(localEntries, merged);
+        await saveLocalEntries(date, merged);
+        pulled += pullChanges;
+        if (pullChanges > 0) changed = true;
+
+        // Push-back
+        if (localEntries.length > 0) {
+          const pushChanges = countChangedEntries(remote.entries, merged);
+          const version = Date.now();
+          await DriveAPI.updateFile(token, fileId, { date, entries: merged, version });
+          meta.partitionVersions[date] = version;
+          ctx.versionPatches.partitionVersions[date] = version;
+          pushed += pushChanges;
+        } else {
+          meta.partitionVersions[date] = remoteVersion;
+        }
+      } catch {
+        // Skip this partition on error
       }
+    }
 
-      const mergedVersions = { ...remoteVersions };
-      for (const [d, v] of Object.entries(meta.partitionVersions)) {
-        mergedVersions[d] = Math.max(v, mergedVersions[d] || 0);
+    // push 파티션 병렬
+    const pushResults = await parallelMap(pushDates, async (date) => {
+      return pushPartitionCore(token, date, meta, ctx);
+    });
+    for (const result of pushResults) {
+      if (result.status === 'fulfilled') {
+        pushed += result.value;
+        meta = await getLocalMeta(); // meta 갱신
       }
-      meta.partitionVersions = mergedVersions;
+    }
 
-      const syncMeta: DriveSyncMeta = {
-        partitionVersions: mergedVersions,
-        deletedEntries: cleanTombstones({ ...remoteDeleted, ...meta.deletedEntries }),
-      };
-
-      if (metaFileId) {
-        await DriveAPI.updateFile(token, metaFileId, syncMeta);
-      } else {
-        const newId = await DriveAPI.createFile(token, DRIVE_META_FILE, syncMeta);
-        meta.driveFileIds[DRIVE_META_FILE] = newId;
+    // init (0/0) 파티션 — 로컬에 있으면 push
+    const initResults = await parallelMap(initDates, async (date) => {
+      const localEntries = await getLocalEntries(date);
+      if (localEntries.length > 0) {
+        return pushPartitionCore(token, date, meta, ctx);
       }
+      return 0;
+    });
+    for (const result of initResults) {
+      if (result.status === 'fulfilled') {
+        pushed += result.value;
+        meta = await getLocalMeta();
+      }
+    }
+
+    // commitSyncMeta: 재읽기 + 머지 + 1회 쓰기
+    if (pushed > 0) {
+      await commitSyncMeta(ctx);
     }
 
     meta.deletedEntries = cleanTombstones(meta.deletedEntries);
@@ -345,6 +366,57 @@ export const DriveSync = {
   },
 };
 
+/**
+ * ctx 있으면 병렬 push에서 사용하는 코어 로직.
+ * meta write + index write 제거, versionPatches에만 누적.
+ */
+async function pushPartitionCore(
+  token: string,
+  date: string,
+  meta: SyncMetadata,
+  ctx: SyncContext
+): Promise<number> {
+  let entries = await getLocalEntries(date);
+  const version = Date.now();
+
+  const fileName = drivePartitionName(date);
+  const fileId = resolveFileId(ctx.fileIdMap, ctx.localDriveFileIds, fileName);
+
+  // Merge-before-push
+  let remoteEntries: VocabEntry[] = [];
+  if (fileId) {
+    try {
+      const remote = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
+      remoteEntries = remote.entries;
+      entries = mergeEntries(entries, remoteEntries, meta.deletedEntries);
+      await saveLocalEntries(date, entries);
+    } catch {
+      // Drive 읽기 실패 → 로컬만 push
+    }
+  }
+
+  const changedCount = countChangedEntries(remoteEntries, entries);
+  const content: DrivePartitionContent = { date, entries, version };
+
+  if (fileId) {
+    await DriveAPI.updateFile(token, fileId, content);
+  } else {
+    const newId = await DriveAPI.createFile(token, fileName, content);
+    meta.driveFileIds[fileName] = newId;
+    ctx.localDriveFileIds[fileName] = newId;
+  }
+
+  meta.partitionVersions[date] = version;
+  ctx.versionPatches.partitionVersions[date] = version;
+
+  return changedCount;
+}
+
+/**
+ * 단건 push — pushPartition(debounce) 경로에서 사용.
+ * ctx 미사용, 기존 ensureDriveFileId 캐시 활용.
+ * 개선: meta write + index write를 Promise.all로 병렬화.
+ */
 async function pushPartitionImmediate(date: string): Promise<number> {
   const token = await DriveAuth.getValidToken();
   if (!token) return 0;
@@ -408,21 +480,19 @@ async function pushPartitionImmediate(date: string): Promise<number> {
     deletedEntries: cleanTombstones({ ...remoteDeleted, ...meta.deletedEntries }),
   };
 
-  if (metaFileId) {
-    await DriveAPI.updateFile(token, metaFileId, remoteSyncMeta);
-  } else {
-    const newId = await DriveAPI.createFile(token, DRIVE_META_FILE, remoteSyncMeta);
-    meta.driveFileIds[DRIVE_META_FILE] = newId;
-  }
-
+  // meta write + index write 병렬화 (~200ms 절약)
   const localIndex = await getLocalIndex();
   const indexFileId = await ensureDriveFileId(token, meta, DRIVE_INDEX_FILE);
-  if (indexFileId) {
-    await DriveAPI.updateFile(token, indexFileId, localIndex);
-  } else {
-    const newId = await DriveAPI.createFile(token, DRIVE_INDEX_FILE, localIndex);
-    meta.driveFileIds[DRIVE_INDEX_FILE] = newId;
-  }
+
+  const metaWritePromise = metaFileId
+    ? DriveAPI.updateFile(token, metaFileId, remoteSyncMeta)
+    : DriveAPI.createFile(token, DRIVE_META_FILE, remoteSyncMeta).then(newId => { meta.driveFileIds[DRIVE_META_FILE] = newId; });
+
+  const indexWritePromise = indexFileId
+    ? DriveAPI.updateFile(token, indexFileId, localIndex)
+    : DriveAPI.createFile(token, DRIVE_INDEX_FILE, localIndex).then(newId => { meta.driveFileIds[DRIVE_INDEX_FILE] = newId; });
+
+  await Promise.all([metaWritePromise, indexWritePromise]);
 
   await saveLocalMeta(meta);
   return changedCount;

@@ -38,6 +38,8 @@ export class SubtitleExtractor {
   private timeUpdateHandler: (() => void) | null = null;
   private lastDisplayedText: string = '';
   private videoElement: HTMLVideoElement | null = null;
+  private trackWatcherCleanup: (() => void) | null = null;
+  private upgrading = false;
 
   constructor(onSubtitle: SubtitleCallback, onClear?: () => void) {
     this.onSubtitle = onSubtitle;
@@ -75,6 +77,8 @@ export class SubtitleExtractor {
     if (timedTextSuccess) {
       this.activeMethod = 'timedtext';
       log.info('Using TimedText method, entries:', this.timedTextEntries.length);
+      // Still watch for TextTrack upgrade (preferred over timedtext)
+      this.startTrackWatcher();
       return;
     }
 
@@ -82,6 +86,9 @@ export class SubtitleExtractor {
     this.tryDomCapture();
     this.activeMethod = 'dom';
     log.info('Using DOM capture fallback');
+
+    // 5. Watch for TextTrack to become available later
+    this.startTrackWatcher();
   }
 
   /**
@@ -117,6 +124,7 @@ export class SubtitleExtractor {
   }
 
   stop(): void {
+    this.stopTrackWatcher();
     if (this.domObserver) {
       this.domObserver.disconnect();
       this.domObserver = null;
@@ -139,6 +147,61 @@ export class SubtitleExtractor {
 
   getActiveMethod(): string | null {
     return this.activeMethod;
+  }
+
+  /**
+   * Watch for TextTrack to become available after initial start() failed to use it.
+   * Listens for addtrack/change events and retries at 3s/8s.
+   */
+  private startTrackWatcher(): void {
+    const video = document.querySelector('video');
+    if (!video) return;
+
+    const tryUpgrade = async () => {
+      if (this.upgrading || this.activeMethod === 'texttrack' || !this.activeMethod) return;
+      this.upgrading = true;
+      try {
+        const enabled = await this.enableCaptions('ja');
+        if (enabled) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
+        const success = await this.tryTextTrack();
+        if (!success) return;
+
+        // Clean up previous method (DOM observer / timedtext timeupdate)
+        if (this.domObserver) { this.domObserver.disconnect(); this.domObserver = null; }
+        if (this.timeUpdateHandler && this.videoElement) {
+          this.videoElement.removeEventListener('timeupdate', this.timeUpdateHandler);
+          this.timeUpdateHandler = null;
+        }
+        this.timedTextEntries = [];
+        this.activeMethod = 'texttrack';
+        log.info('Upgraded to TextTrack method');
+        this.stopTrackWatcher();
+      } finally {
+        this.upgrading = false;
+      }
+    };
+
+    const handler = () => { tryUpgrade(); };
+    video.textTracks.addEventListener('addtrack', handler);
+    video.textTracks.addEventListener('change', handler);
+
+    const timers = [
+      setTimeout(() => tryUpgrade(), 3000),
+      setTimeout(() => tryUpgrade(), 8000),
+    ];
+
+    this.trackWatcherCleanup = () => {
+      video.textTracks.removeEventListener('addtrack', handler);
+      video.textTracks.removeEventListener('change', handler);
+      timers.forEach(clearTimeout);
+    };
+  }
+
+  private stopTrackWatcher(): void {
+    this.trackWatcherCleanup?.();
+    this.trackWatcherCleanup = null;
   }
 
   /**

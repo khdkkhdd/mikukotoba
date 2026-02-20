@@ -1,5 +1,7 @@
 import type { DriveStatus } from '@/types';
+import { createLogger } from '@/core/logger';
 
+const log = createLogger('DriveAuth');
 const TOKEN_KEY = 'jp_drive_token';
 const CLIENT_ID_KEY = 'jp_drive_client_id';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata openid email';
@@ -41,16 +43,22 @@ async function fetchUserEmail(accessToken: string): Promise<string> {
   return info.email || '';
 }
 
+/** 권한 자체가 취소된 영구 에러 — 토큰 삭제 필요 */
+const PERMANENT_ERRORS = new Set(['access_denied', 'invalid_scope']);
+
 /**
  * Silent refresh: prompt=none으로 새 토큰 획득 시도.
  * - 성공 → 새 access_token 반환
- * - 영구 에러 (권한 취소, interaction_required 등) → 토큰 삭제, null 반환
- * - 일시적 에러 (네트워크, 타임아웃 등) → 토큰 유지, null 반환
+ * - 영구 에러 (access_denied 등) → 토큰 삭제, null 반환
+ * - 세션 만료 (interaction_required 등) / 일시적 에러 → 토큰 유지, null 반환
  */
 async function silentRefresh(token: StoredToken): Promise<string | null> {
   try {
     const clientId = await getClientId();
-    if (!clientId) return null;
+    if (!clientId) {
+      log.info('silentRefresh: no clientId');
+      return null;
+    }
     const redirectUrl = getRedirectUrl();
 
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
@@ -59,6 +67,11 @@ async function silentRefresh(token: StoredToken): Promise<string | null> {
     authUrl.searchParams.set('response_type', 'token');
     authUrl.searchParams.set('scope', SCOPES);
     authUrl.searchParams.set('prompt', 'none');
+    if (token.email) {
+      authUrl.searchParams.set('login_hint', token.email);
+    }
+
+    log.info('silentRefresh: attempting, email:', token.email || '(none)');
 
     const responseUrl = await chrome.identity.launchWebAuthFlow({
       url: authUrl.toString(),
@@ -66,8 +79,7 @@ async function silentRefresh(token: StoredToken): Promise<string | null> {
     });
 
     if (!responseUrl) {
-      // 응답 없음 → 영구 에러 (사용자 세션 만료 등)
-      await clearToken();
+      log.info('silentRefresh: no responseUrl');
       return null;
     }
 
@@ -77,8 +89,10 @@ async function silentRefresh(token: StoredToken): Promise<string | null> {
     );
     const error = hashParams.get('error');
     if (error) {
-      // interaction_required, consent_required, login_required → 영구 에러
-      await clearToken();
+      log.info('silentRefresh: error:', error);
+      if (PERMANENT_ERRORS.has(error)) {
+        await clearToken();
+      }
       return null;
     }
 
@@ -86,7 +100,7 @@ async function silentRefresh(token: StoredToken): Promise<string | null> {
     const expiresIn = parseInt(hashParams.get('expires_in') || '3600', 10);
 
     if (!accessToken) {
-      await clearToken();
+      log.info('silentRefresh: no access_token in response');
       return null;
     }
 
@@ -96,10 +110,10 @@ async function silentRefresh(token: StoredToken): Promise<string | null> {
       email: token.email,
     });
 
+    log.info('silentRefresh: OK, expires_in:', expiresIn);
     return accessToken;
-  } catch {
-    // 네트워크 에러, 타임아웃, 확장 리로드 등 일시적 에러
-    // → 토큰 유지 (다음 시도에서 재시도 가능)
+  } catch (err) {
+    log.info('silentRefresh: exception:', String(err));
     return null;
   }
 }
@@ -181,10 +195,13 @@ export const DriveAuth = {
       return { loggedIn: true, email: token.email };
     }
 
-    // 만료된 토큰 → silent refresh 시도 후 결과 반환
-    const refreshed = await silentRefresh(token);
-    if (refreshed) {
-      return { loggedIn: true, email: token.email };
+    // 만료된 토큰 → silent refresh 시도
+    await silentRefresh(token);
+
+    // 토큰이 삭제되지 않았으면 (영구 에러가 아니면) 로그인 유지
+    const current = await getStoredToken();
+    if (current) {
+      return { loggedIn: true, email: current.email };
     }
     return { loggedIn: false };
   },

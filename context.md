@@ -1,35 +1,49 @@
 # Goal
 
-동기화 시 학습기록(FSRS card_state, review_log) 손실 버그 수정.
-크롬 익스텐션에서 단어 추가 후 모바일 앱에서 sync하면 기존 학습기록이 전부 삭제되는 문제.
+모바일 앱의 자동 동기화 및 학습 UX 개선.
+
+1. Cold start 시 자동 pull 추가
+2. 자동 sync 후 마지막 동기화 시간 반영
+3. 학습 대기 화면에서 실시간 카운트다운 + 자동 재개
 
 # Research
 
-## 근본 원인: INSERT OR REPLACE + ON DELETE CASCADE
+## 모바일 동기화 구조
 
-- `schema.ts`: `PRAGMA foreign_keys = ON` 활성화 상태
-- `card_state.vocab_id REFERENCES vocab(id) ON DELETE CASCADE` — vocab 삭제 시 card_state 연쇄 삭제
-- `review_log.vocab_id REFERENCES vocab(id) ON DELETE CASCADE` — 동일하게 review_log도 연쇄 삭제
-- `queries.ts:upsertEntry()`: `INSERT OR REPLACE INTO vocab` 사용
-- SQLite의 `INSERT OR REPLACE`는 PK 충돌 시 **DELETE → INSERT** 순서로 동작
-- DELETE 단계에서 CASCADE 트리거 → card_state, review_log 행 삭제
-- 이후 vocab 행은 재삽입되지만 학습기록은 이미 소실
+- `SyncManager` (`services/sync-manager.ts`): 모듈 레벨 상태로 dirty 추적, flush/pull 관리
+- `initSyncManager(db)`: `_layout.tsx`에서 앱 시작 시 호출. `AppState` 리스너 등록
+- `handleAppStateChange`: background→flush, foreground→3종 pull (vocab/FSRS/review)
+- `fullSync`: 수동 동기화 (설정 탭 버튼). flush→pull→push→`commitSyncMeta`
+- `lastSyncTime`: `useSettingsStore`(UI) + `setSyncMeta`(DB 영속화) 이중 저장
 
-## 발생 경로
+## Cold start 시 pull 부재
 
-`pullFromDrive` → `mergeEntries` (기존+새 항목 합침) → `upsertEntries` → 기존 vocab을 동일 id로 re-insert → CASCADE 삭제
+- `initSyncManager`은 `AppState` 리스너만 등록, 초기 pull 없음
+- Cold start는 이미 `active` 상태로 시작 → state change 이벤트 미발생 → pull 안 됨
 
-## 부차 버그: 익스텐션 메타데이터 덮어쓰기
+## lastSyncTime 업데이트 범위
 
-- `extension/drive-sync.ts:pushPartitionImmediate()`: remote `sync_metadata.json` 읽을 때 `fsrsPartitionVersions`/`reviewPartitionVersions` 필드를 읽지 않고, 새 메타 작성 시 이 필드를 제외하여 Drive에서 삭제됨
-- 모바일이 이전에 push한 FSRS/리뷰 버전 정보가 소실될 수 있음
+- 기존: `fullSync` (수동) 에서만 업데이트
+- `handleAppStateChange` (포그라운드 복귀) 에서는 미업데이트
+- `settings.tsx:43-44`에서 수동 동기화 시 store + DB 모두 업데이트하는 패턴 확인
+
+## 학습 대기 화면 (SrsSession.tsx)
+
+- `selectNextCard` → 'waiting' view: 모든 큐 비었고 waitingQueue만 남을 때
+- 기존: `const now = Date.now()` (렌더 스냅샷, 매초 갱신 안 됨)
+- 기존 TICK: `setTimeout`으로 정확히 due 시점에 1회 발화 → 카드 승격은 됐지만 카운트다운 시각 변화 없음
+- `selectNextCard` 내부에서 `promoteWaiting(state, now)` 호출 — 순수 함수, session state 미변경
+- `applyGrade`는 `learningQueue`/`reviewQueue`/`newQueue`에서만 카드 검색 → waitingQueue에 있으면 채점 무시
 
 # Plan
 
 ## Decisions
 
-- `INSERT OR REPLACE` → `INSERT ... ON CONFLICT(id) DO UPDATE SET ...` 변경: 진짜 UPSERT로 DELETE를 트리거하지 않아 CASCADE 미발생
-- 익스텐션 `pushPartitionImmediate`에서 remote meta 읽을 때 FSRS/리뷰 버전도 읽어서 보존
+- Cold start pull: `initSyncManager` 내에서 fire-and-forget async로 기존 foreground pull과 동일 패턴
+- lastSyncTime: 자동 pull 성공 시에도 store + DB 업데이트. `commitSyncMeta`는 경량 pull 설계상 생략 (기존 foreground pull과 동일)
+- 카운트다운: `useState(Date.now())` + `setInterval(1000)` — waiting 큐 있을 때만 활성화
+- TICK dispatch: `setInterval` 콜백에서 `setNow` + `dispatch TICK` 동시 호출 (React 18 배치로 1회 렌더)
+- AppState 복귀: `setNow` + `dispatch TICK` 모두 필요 — TICK 없으면 session state와 뷰 불일치로 채점 실패
 
 ## Steps
 
@@ -37,9 +51,10 @@
 
 # Progress
 
-- [x] 원인 분석: `INSERT OR REPLACE` + `ON DELETE CASCADE` 조합 확인
-- [x] `queries.ts:upsertEntry()` 수정: `ON CONFLICT(id) DO UPDATE SET` 방식으로 변경
-- [x] `extension/drive-sync.ts:pushPartitionImmediate()` 수정: `fsrsPartitionVersions`/`reviewPartitionVersions` 보존
-- [x] 빌드 검증: extension build + mobile tsc --noEmit 통과
+- [x] `initSyncManager`에 cold start pull 추가 (`sync-manager.ts:160-183`)
+- [x] `handleAppStateChange` + cold start pull에 `lastSyncTime` 업데이트 추가
+- [x] `SrsSession.tsx` 카운트다운: `setTimeout` → `setInterval(1000)` + `useState(now)` 전환
+- [x] AppState 복귀 시 TICK dispatch 누락 버그 수정
+- [x] 미사용 import (`getNextWaitingTime`, `timerRef`) 정리
+- [x] tsc --noEmit 통과
 - [ ] 커밋
-- [ ] decision writing

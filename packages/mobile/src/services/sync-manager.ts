@@ -4,6 +4,8 @@ import { createSyncContextFromDb, pullFromDrive, pushToDrive, pullFsrsPartitions
 import { commitSyncMeta } from '@mikukotoba/shared';
 import { getAccessToken } from './drive-auth';
 import { useVocabStore } from '../stores/vocab-store';
+import { useSettingsStore } from '../stores/settings-store';
+import { setSyncMeta } from '../db/queries';
 
 const DEBOUNCE_MS = 30_000; // 30초
 
@@ -141,6 +143,10 @@ async function handleAppStateChange(nextState: string) {
       if (vocabResult.changed) {
         await useVocabStore.getState().refresh(database);
       }
+
+      const now = Date.now();
+      useSettingsStore.getState().setSyncState(false, now);
+      await setSyncMeta(database, 'lastSyncTime', String(now));
     } catch {
       // 포그라운드 pull 실패 — 무시
     }
@@ -150,6 +156,31 @@ async function handleAppStateChange(nextState: string) {
 export function initSyncManager(db: SQLiteDatabase) {
   database = db;
   appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+
+  // cold start 시 자동 pull
+  (async () => {
+    try {
+      const result = await createSyncContextFromDb(db);
+      if (!result) return;
+      const { ctx } = result;
+
+      const [vocabResult] = await Promise.all([
+        pullFromDrive(db, ctx),
+        pullFsrsPartitions(db, ctx),
+        pullReviewLogPartitions(db, ctx),
+      ]);
+
+      if (vocabResult.changed) {
+        await useVocabStore.getState().refresh(db);
+      }
+
+      const now = Date.now();
+      useSettingsStore.getState().setSyncState(false, now);
+      await setSyncMeta(db, 'lastSyncTime', String(now));
+    } catch {
+      // cold start pull 실패 — 무시
+    }
+  })();
 }
 
 export function destroySyncManager() {

@@ -1,5 +1,5 @@
 import { View, Text, Pressable, StyleSheet, AppState, Alert } from 'react-native';
-import { useEffect, useReducer, useRef, useCallback } from 'react';
+import { useEffect, useReducer, useRef, useCallback, useState } from 'react';
 import { State as FsrsState } from 'ts-fsrs';
 import type { Card, Grade } from 'ts-fsrs';
 import { useDatabase } from '../components/DatabaseContext';
@@ -20,7 +20,6 @@ import {
   applyGrade,
   promoteWaiting,
   getCounts,
-  getNextWaitingTime,
   type SessionState,
   type StudyItem,
 } from './study-session';
@@ -120,8 +119,8 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
   const database = useDatabase();
   const dailyNewCards = useSettingsStore((s) => s.dailyNewCards);
   const [state, dispatch] = useReducer(studyReducer, initialState);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gradingRef = useRef(false);
+  const [now, setNow] = useState(Date.now());
 
   // 세션 초기화
   useEffect(() => {
@@ -160,27 +159,23 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
     return () => { cancelled = true; };
   }, [database, dailyNewCards, filterTag]);
 
-  // 동적 setTimeout — waiting 타이머
+  // 1초 간격 카운트다운 — waiting 큐가 있을 때만
   useEffect(() => {
-    if (!state.session) return;
+    if (!state.session?.waitingQueue.length) return;
 
-    const nextDue = getNextWaitingTime(state.session);
-    if (nextDue === null) return;
+    const id = setInterval(() => {
+      setNow(Date.now());
+      dispatch({ type: 'TICK' }); // due 된 카드 승격 (React 배치로 1회 렌더)
+    }, 1000);
 
-    const delay = Math.max(0, nextDue - Date.now());
-    timerRef.current = setTimeout(() => {
-      dispatch({ type: 'TICK' });
-    }, delay);
+    return () => clearInterval(id);
+  }, [state.session?.waitingQueue.length]);
 
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [state.session?.waitingQueue]);
-
-  // AppState 복귀 시 TICK
+  // AppState 복귀 시 now 갱신 + 대기 카드 승격
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
+        setNow(Date.now());
         dispatch({ type: 'TICK' });
       }
     });
@@ -237,7 +232,6 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
     );
   }
 
-  const now = Date.now();
   const view = selectNextCard(state.session, now);
   const counts = getCounts(state.session);
 

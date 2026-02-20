@@ -63,6 +63,17 @@ export class GeminiClient implements LLMClient {
     return `${GEMINI_API_BASE}/${this.model}:generateContent`;
   }
 
+  /** Disable/minimize thinking — unnecessary for translation tasks */
+  private getThinkingConfig(): { thinkingConfig: Record<string, unknown> } | null {
+    if (/^gemini-2\.5/.test(this.model)) {
+      return { thinkingConfig: { thinkingBudget: 0 } };
+    }
+    if (/^gemini-3/.test(this.model)) {
+      return { thinkingConfig: { thinkingLevel: 'low' } };
+    }
+    return null;
+  }
+
   async translate(text: string, context: TranslationContext, level?: LearningLevel): Promise<string> {
     if (!this.isConfigured()) {
       throw new Error('Gemini API key not configured');
@@ -94,10 +105,7 @@ export class GeminiClient implements LLMClient {
             ],
             generationConfig: {
               maxOutputTokens: 4096,
-              // Minimize thinking for Gemini 3+ (which uses thinking by default)
-              ...(this.model.startsWith('gemini-3') && {
-                thinkingConfig: { thinkingLevel: 'minimal' },
-              }),
+              ...this.getThinkingConfig(),
             },
           }),
         });
@@ -158,9 +166,7 @@ export class GeminiClient implements LLMClient {
           ],
           generationConfig: {
             maxOutputTokens: 64,
-            ...(this.model.startsWith('gemini-3') && {
-              thinkingConfig: { thinkingLevel: 'minimal' },
-            }),
+            ...this.getThinkingConfig(),
           },
         }),
       });

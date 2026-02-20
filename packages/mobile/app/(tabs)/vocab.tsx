@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingTop: 80,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.lg,
   },
   title: { fontSize: fontSize.xxl, fontWeight: '700', color: colors.text },
   count: { fontSize: fontSize.sm, color: colors.textMuted },

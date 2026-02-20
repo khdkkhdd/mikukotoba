@@ -1,7 +1,8 @@
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useDatabase } from '../components/DatabaseContext';
-import { getRandomEntriesByDateRange, getDateRange, getCountByDateRange, getDateGroups } from '../db/queries';
+import { getDateRange, getDateGroups, getAllTagCounts, getRandomEntriesByFilters, getCountByFilters } from '../db/queries';
+import type { RelayFilters } from '../db/queries';
 import { Calendar, type CalendarMarking } from '../components/Calendar';
 import { StudyCard } from './StudyCard';
 import type { VocabEntry } from '@mikukotoba/shared';
@@ -13,7 +14,7 @@ interface RelaySessionProps {
   onExit: () => void;
 }
 
-type RelayPhase = 'date-select' | 'studying';
+type RelayPhase = 'filter-select' | 'studying';
 
 function fmtToday(): string {
   const d = new Date();
@@ -41,7 +42,7 @@ function monthStart(): string {
 
 export function RelaySession({ onExit }: RelaySessionProps) {
   const database = useDatabase();
-  const [phase, setPhase] = useState<RelayPhase>('date-select');
+  const [phase, setPhase] = useState<RelayPhase>('filter-select');
 
   // 날짜 선택
   const [dateMin, setDateMin] = useState('');
@@ -51,6 +52,10 @@ export function RelaySession({ onExit }: RelaySessionProps) {
   const [totalCount, setTotalCount] = useState(0);
   const [isLoadingDates, setIsLoadingDates] = useState(true);
   const [dateGroups, setDateGroups] = useState<{ date: string; count: number }[]>([]);
+
+  // 태그 선택
+  const [selectedTag, setSelectedTag] = useState<string | undefined>(undefined);
+  const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
 
   // 학습
   const [entries, setEntries] = useState<VocabEntry[]>([]);
@@ -69,20 +74,21 @@ export function RelaySession({ onExit }: RelaySessionProps) {
     return m;
   }, [dateGroups]);
 
-  // 날짜 범위 + 그룹 로드
+  // 날짜 범위 + 그룹 + 태그 로드
   useEffect(() => {
     async function load() {
-      const [range, groups] = await Promise.all([
+      const [range, groups, tags] = await Promise.all([
         getDateRange(database),
         getDateGroups(database),
+        getAllTagCounts(database),
       ]);
       setDateGroups(groups);
+      setTagCounts(tags);
       if (range) {
         setDateMin(range.min);
         setDateMax(range.max);
-        setStartDate(range.min);
-        setEndDate(range.max);
-        const count = await getCountByDateRange(database, range.min, range.max);
+        // 초기: 날짜/태그 필터 없이 전체 카운트
+        const count = await getCountByFilters(database, {});
         setTotalCount(count);
       }
       setIsLoadingDates(false);
@@ -90,13 +96,12 @@ export function RelaySession({ onExit }: RelaySessionProps) {
     load();
   }, [database]);
 
-  // 날짜 변경 시 카운트 업데이트
-  const updateCount = useCallback(async (start: string, end: string) => {
-    if (!start || !end) {
-      setTotalCount(0);
-      return;
-    }
-    const count = await getCountByDateRange(database, start, end);
+  // 복합 필터 카운트 업데이트
+  const updateCount = useCallback(async (tag: string | undefined, start: string, end: string) => {
+    const filters: RelayFilters = {};
+    if (tag !== undefined) filters.tag = tag;
+    if (start && end) { filters.startDate = start; filters.endDate = end; }
+    const count = await getCountByFilters(database, filters);
     setTotalCount(count);
   }, [database]);
 
@@ -105,12 +110,12 @@ export function RelaySession({ onExit }: RelaySessionProps) {
     setStartDate(start);
     if (end) {
       setEndDate(end);
-      updateCount(start, end);
+      updateCount(selectedTag, start, end);
     } else {
       setEndDate('');
-      setTotalCount(0);
+      updateCount(selectedTag, '', '');
     }
-  }, [updateCount]);
+  }, [updateCount, selectedTag]);
 
   // 프리셋 선택
   const handlePreset = useCallback((start: string, end: string) => {
@@ -118,18 +123,27 @@ export function RelaySession({ onExit }: RelaySessionProps) {
     const clampedEnd = end > dateMax ? dateMax : end;
     setStartDate(clampedStart);
     setEndDate(clampedEnd);
-    updateCount(clampedStart, clampedEnd);
-  }, [dateMin, dateMax, updateCount]);
+    updateCount(selectedTag, clampedStart, clampedEnd);
+  }, [dateMin, dateMax, updateCount, selectedTag]);
+
+  // 태그 선택 핸들러
+  const handleTagSelect = useCallback((tag: string | undefined) => {
+    setSelectedTag(tag);
+    updateCount(tag, startDate, endDate);
+  }, [updateCount, startDate, endDate]);
 
   // 배치 로드
   const loadBatch = useCallback(async () => {
-    const batch = await getRandomEntriesByDateRange(database, startDate, endDate, BATCH_SIZE);
+    const filters: RelayFilters = {};
+    if (selectedTag !== undefined) filters.tag = selectedTag;
+    if (startDate && endDate) { filters.startDate = startDate; filters.endDate = endDate; }
+    const batch = await getRandomEntriesByFilters(database, filters, BATCH_SIZE);
     setEntries(batch);
     setCurrentIndex(0);
     setShowAnswer(false);
     setShowReadingHint(false);
     setShowExampleHint(false);
-  }, [database, startDate, endDate]);
+  }, [database, startDate, endDate, selectedTag]);
 
   // 학습 시작
   const handleStart = useCallback(async () => {
@@ -153,10 +167,16 @@ export function RelaySession({ onExit }: RelaySessionProps) {
   }, [currentIndex, entries.length, loadBatch]);
 
   const today = fmtToday();
-  const hasRange = startDate && endDate;
+  const hasDateRange = startDate && endDate;
 
-  // --- 날짜 선택 화면 ---
-  if (phase === 'date-select') {
+  // 태그 목록
+  const tagList = useMemo(() => {
+    const tags = Object.keys(tagCounts).sort();
+    return tags;
+  }, [tagCounts]);
+
+  // --- 필터 선택 화면 ---
+  if (phase === 'filter-select') {
     if (isLoadingDates) {
       return (
         <View style={styles.container}>
@@ -181,12 +201,48 @@ export function RelaySession({ onExit }: RelaySessionProps) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>자유 복습</Text>
-        <Text style={styles.subtitle}>날짜 범위를 선택하세요</Text>
+
+        {/* 태그 선택 */}
+        {tagList.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>태그 선택 (선택사항)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagScrollRow}>
+              <View style={styles.tagRow}>
+                <Pressable
+                  style={[styles.tagChip, selectedTag === undefined && styles.tagChipSelected]}
+                  onPress={() => handleTagSelect(undefined)}
+                >
+                  <Text style={[styles.tagChipText, selectedTag === undefined && styles.tagChipTextSelected]}>전체</Text>
+                </Pressable>
+                {tagList.map((tag) => (
+                  <Pressable
+                    key={tag}
+                    style={[styles.tagChip, selectedTag === tag && styles.tagChipSelected]}
+                    onPress={() => handleTagSelect(tag)}
+                  >
+                    <Text style={[styles.tagChipText, selectedTag === tag && styles.tagChipTextSelected]}>
+                      {tag} ({tagCounts[tag]})
+                    </Text>
+                  </Pressable>
+                ))}
+                <Pressable
+                  style={[styles.tagChip, selectedTag === '' && styles.tagChipSelected]}
+                  onPress={() => handleTagSelect('')}
+                >
+                  <Text style={[styles.tagChipText, selectedTag === '' && styles.tagChipTextSelected]}>태그 없음</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </>
+        )}
+
+        {/* 날짜 범위 선택 */}
+        <Text style={styles.sectionLabel}>날짜 범위 선택 (선택사항)</Text>
 
         <Calendar
           mode="range"
-          startDate={hasRange ? startDate : undefined}
-          endDate={hasRange ? endDate : undefined}
+          startDate={hasDateRange ? startDate : undefined}
+          endDate={hasDateRange ? endDate : undefined}
           onSelectRange={handleRangeSelect}
           markings={markings}
         />
@@ -196,18 +252,26 @@ export function RelaySession({ onExit }: RelaySessionProps) {
           <PresetChip label="최근 7일" onPress={() => handlePreset(daysAgo(6), today)} />
           <PresetChip label="최근 30일" onPress={() => handlePreset(daysAgo(29), today)} />
           <PresetChip label="이번 달" onPress={() => handlePreset(monthStart(), today)} />
-          <PresetChip label="전체" onPress={() => handlePreset(dateMin, dateMax)} />
+          <PresetChip
+            label="전체 기간"
+            onPress={() => {
+              setStartDate('');
+              setEndDate('');
+              updateCount(selectedTag, '', '');
+            }}
+            active={!hasDateRange}
+          />
         </View>
 
         <Text style={styles.countText}>
-          {hasRange ? `총 ${totalCount}개 단어` : '종료일을 선택하세요'}
+          총 {totalCount}개 단어
         </Text>
 
         <View style={styles.bottomButtons}>
           <Pressable
-            style={[styles.startButton, (!hasRange || totalCount === 0) && styles.startButtonDisabled]}
+            style={[styles.startButton, totalCount === 0 && styles.startButtonDisabled]}
             onPress={handleStart}
-            disabled={!hasRange || totalCount === 0}
+            disabled={totalCount === 0}
           >
             <Text style={styles.startText}>시작하기</Text>
           </Pressable>
@@ -236,7 +300,9 @@ export function RelaySession({ onExit }: RelaySessionProps) {
         <Pressable style={styles.closeButton} onPress={onExit} hitSlop={8}>
           <Text style={styles.closeText}>✕ 종료</Text>
         </Pressable>
-        <Text style={styles.sessionTitle}>자유 복습</Text>
+        <Text style={styles.sessionTitle}>
+          자유 복습{selectedTag !== undefined ? ` · ${selectedTag || '태그 없음'}` : ''}
+        </Text>
         <View style={styles.closeButton} />
       </View>
 
@@ -270,13 +336,13 @@ export function RelaySession({ onExit }: RelaySessionProps) {
   );
 }
 
-function PresetChip({ label, onPress }: { label: string; onPress: () => void }) {
+function PresetChip({ label, onPress, active }: { label: string; onPress: () => void; active?: boolean }) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.presetChip, pressed && styles.presetChipPressed]}
+      style={({ pressed }) => [styles.presetChip, (pressed || active) && styles.presetChipActive]}
       onPress={onPress}
     >
-      <Text style={styles.presetText}>{label}</Text>
+      <Text style={[styles.presetText, active && styles.presetTextActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -285,23 +351,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
-    paddingHorizontal: spacing.lg,
-    paddingTop: 60,
   },
   scrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: 80,
     paddingBottom: spacing.xl,
+  },
+  sectionLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+  },
+  tagScrollRow: {
+    marginBottom: spacing.md,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  tagChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: 16,
+    backgroundColor: colors.borderLight,
+  },
+  tagChipSelected: {
+    backgroundColor: colors.accent,
+  },
+  tagChipText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  tagChipTextSelected: {
+    color: '#FFFFFF',
   },
   title: {
     fontSize: fontSize.xxl,
     fontWeight: '700',
     color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.textMuted,
-    textAlign: 'center',
     marginBottom: spacing.lg,
   },
   presetRow: {
@@ -317,12 +406,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: colors.borderLight,
   },
-  presetChipPressed: {
-    backgroundColor: colors.accentLight,
+  presetChipActive: {
+    backgroundColor: colors.accent,
   },
   presetText: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
+  },
+  presetTextActive: {
+    color: '#FFFFFF',
   },
   countText: {
     fontSize: fontSize.lg,

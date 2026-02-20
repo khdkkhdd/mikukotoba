@@ -98,7 +98,8 @@ export function showVocabModal(
   });
 
   if (!isLoading) {
-    const selectedTags: string[] = [];
+    const selectedTags: string[] = ['community'];
+    renderTagChips();
 
     // Load existing tags for autocomplete
     loadAllTags().then((tags) => {

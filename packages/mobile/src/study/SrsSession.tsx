@@ -240,9 +240,6 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
   const now = Date.now();
   const view = selectNextCard(state.session, now);
   const counts = getCounts(state.session);
-  const headerTitle = filterTag !== undefined
-    ? (filterTag === '' ? '학습: 태그 없음' : `학습: ${filterTag}`)
-    : '오늘의 학습';
 
   // 대기 화면
   if (view.type === 'waiting') {
@@ -251,8 +248,7 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
     const sec = remainSec % 60;
     return (
       <View style={styles.container}>
-        <SessionHeader title={headerTitle} onClose={handleHeaderExit} />
-        <CountBar counts={counts} />
+        <CountBar counts={counts} onClose={handleHeaderExit} />
         <View style={styles.waitingCard}>
           <Text style={styles.waitingIcon}>⏳</Text>
           <Text style={styles.waitingTitle}>다음 카드 대기 중</Text>
@@ -271,7 +267,6 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
   if (view.type === 'complete') {
     return (
       <View style={styles.container}>
-        <SessionHeader title={headerTitle} onClose={onExit} />
         <View style={styles.completeCard}>
           <Text style={styles.completeIcon}>🎉</Text>
           <Text style={styles.completeTitle}>학습 완료!</Text>
@@ -299,8 +294,7 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
 
   return (
     <View style={styles.container}>
-      <SessionHeader title={headerTitle} onClose={handleHeaderExit} />
-      <CountBar counts={counts} />
+      <CountBar counts={counts} onClose={handleHeaderExit} />
 
       <View style={styles.cardArea}>
         <StudyCard
@@ -332,33 +326,27 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
 
 // --- 하위 컴포넌트 ---
 
-function SessionHeader({ title, onClose }: { title: string; onClose: () => void }) {
+function CountBar({ counts, onClose }: { counts: { newCount: number; learningCount: number; reviewCount: number }; onClose: () => void }) {
   return (
-    <View style={styles.sessionHeader}>
-      <Pressable style={styles.closeButton} onPress={onClose} hitSlop={8}>
-        <Text style={styles.closeText}>✕ 종료</Text>
+    <View style={styles.countBarRow}>
+      <Pressable onPress={onClose} hitSlop={8} style={styles.closeButton}>
+        <Text style={styles.closeText}>✕</Text>
       </Pressable>
-      <Text style={styles.sessionTitle}>{title}</Text>
+      <View style={styles.countBar}>
+        <View style={styles.countItem}>
+          <View style={[styles.countDot, { backgroundColor: colors.accent }]} />
+          <Text style={[styles.countLabel, { color: colors.accent }]}>N:{counts.newCount}</Text>
+        </View>
+        <View style={styles.countItem}>
+          <View style={[styles.countDot, { backgroundColor: colors.warning }]} />
+          <Text style={[styles.countLabel, { color: colors.warning }]}>L:{counts.learningCount}</Text>
+        </View>
+        <View style={styles.countItem}>
+          <View style={[styles.countDot, { backgroundColor: colors.success }]} />
+          <Text style={[styles.countLabel, { color: colors.success }]}>R:{counts.reviewCount}</Text>
+        </View>
+      </View>
       <View style={styles.closeButton} />
-    </View>
-  );
-}
-
-function CountBar({ counts }: { counts: { newCount: number; learningCount: number; reviewCount: number } }) {
-  return (
-    <View style={styles.countBar}>
-      <View style={styles.countItem}>
-        <View style={[styles.countDot, { backgroundColor: colors.accent }]} />
-        <Text style={[styles.countLabel, { color: colors.accent }]}>N:{counts.newCount}</Text>
-      </View>
-      <View style={styles.countItem}>
-        <View style={[styles.countDot, { backgroundColor: colors.warning }]} />
-        <Text style={[styles.countLabel, { color: colors.warning }]}>L:{counts.learningCount}</Text>
-      </View>
-      <View style={styles.countItem}>
-        <View style={[styles.countDot, { backgroundColor: colors.success }]} />
-        <Text style={[styles.countLabel, { color: colors.success }]}>R:{counts.reviewCount}</Text>
-      </View>
     </View>
   );
 }
@@ -410,11 +398,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 100,
   },
+  countBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  closeButton: {
+    minWidth: 40,
+  },
   countBar: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: spacing.lg,
-    marginBottom: spacing.md,
   },
   countItem: {
     flexDirection: 'row',
@@ -488,24 +484,9 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.xl,
   },
-  sessionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  closeButton: {
-    minWidth: 60,
-  },
   closeText: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-  },
-  sessionTitle: {
-    flex: 1,
-    textAlign: 'center',
     fontSize: fontSize.md,
-    fontWeight: '600',
-    color: colors.text,
+    color: colors.textMuted,
   },
   completeButtons: {
     flexDirection: 'row',

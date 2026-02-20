@@ -416,6 +416,94 @@ export async function getDueCountByTag(db: SQLiteDatabase): Promise<Record<strin
   return counts;
 }
 
+// 릴레이용: 복합 필터 (태그+날짜) 랜덤 조회
+export interface RelayFilters {
+  tag?: string;         // undefined=전체, ''=태그없음, 'xxx'=특정 태그
+  startDate?: string;
+  endDate?: string;
+}
+
+export async function getRandomEntriesByFilters(
+  db: SQLiteDatabase,
+  filters: RelayFilters,
+  limit: number
+): Promise<VocabEntry[]> {
+  const { tag, startDate, endDate } = filters;
+  const hasDate = startDate && endDate;
+  const hasTag = tag !== undefined;
+
+  // 태그 없음: JSON array 비어있음
+  if (hasTag && tag === '') {
+    const rows = await db.getAllAsync<Record<string, unknown>>(
+      `SELECT * FROM vocab WHERE (tags IS NULL OR tags = '[]')${
+        hasDate ? ' AND date_added BETWEEN ? AND ?' : ''
+      } ORDER BY RANDOM() LIMIT ?`,
+      hasDate ? [startDate, endDate, limit] : [limit]
+    );
+    return rows.map(rowToEntry);
+  }
+
+  // 특정 태그
+  if (hasTag) {
+    const pattern = `%${tag}%`;
+    const rows = await db.getAllAsync<Record<string, unknown>>(
+      `SELECT * FROM vocab WHERE tags LIKE ?${
+        hasDate ? ' AND date_added BETWEEN ? AND ?' : ''
+      } ORDER BY RANDOM() LIMIT ?`,
+      hasDate ? [pattern, startDate, endDate, limit * 2] : [pattern, limit * 2]
+    );
+    return rows.map(rowToEntry).filter((e) => e.tags.includes(tag)).slice(0, limit);
+  }
+
+  // 태그 필터 없음
+  if (hasDate) {
+    return getRandomEntriesByDateRange(db, startDate, endDate, limit);
+  }
+
+  // 전체
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    'SELECT * FROM vocab ORDER BY RANDOM() LIMIT ?',
+    [limit]
+  );
+  return rows.map(rowToEntry);
+}
+
+export async function getCountByFilters(
+  db: SQLiteDatabase,
+  filters: RelayFilters
+): Promise<number> {
+  const { tag, startDate, endDate } = filters;
+  const hasDate = startDate && endDate;
+  const hasTag = tag !== undefined;
+
+  if (hasTag && tag === '') {
+    const result = await db.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM vocab WHERE (tags IS NULL OR tags = '[]')${
+        hasDate ? ' AND date_added BETWEEN ? AND ?' : ''
+      }`,
+      hasDate ? [startDate, endDate] : []
+    );
+    return result?.count ?? 0;
+  }
+
+  if (hasTag) {
+    const pattern = `%${tag}%`;
+    const rows = await db.getAllAsync<{ tags: string }>(
+      `SELECT tags FROM vocab WHERE tags LIKE ?${
+        hasDate ? ' AND date_added BETWEEN ? AND ?' : ''
+      }`,
+      hasDate ? [pattern, startDate, endDate] : [pattern]
+    );
+    return rows.filter((r) => parseTags(r.tags).includes(tag)).length;
+  }
+
+  if (hasDate) {
+    return getCountByDateRange(db, startDate, endDate);
+  }
+
+  return getTotalCount(db);
+}
+
 // --- 통계 쿼리 ---
 
 /** 일별 학습 집계 (날짜, 총 카드 수, 등급별 수) */

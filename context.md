@@ -1,20 +1,54 @@
 # Goal
 
-모바일 단어장(vocab) 화면 UI 여백/간격 개선. 태그 필터 행, 검색창-헤더 간격, 섹션 헤더 보더 등 시각적 밀도 조정.
+릴레이(자유 복습) 세션에 태그 필터 추가 + SRS 세션 헤더 간소화 + 확장프로그램 기본 태그 설정.
 
 # Research
 
-파일: `packages/mobile/app/(tabs)/vocab.tsx`
-테마: `packages/mobile/src/components/theme.ts` — spacing.xs=4, sm=8, md=16, lg=24
+## 릴레이 세션 필터 확장
 
-현재 변경 내역:
-- `tagRowContent`: `alignItems: 'center'` 추가 → 태그 칩 수직 중앙 정렬 (tagRow maxHeight: 40 유지)
-- `searchInput.marginBottom`: spacing.md(16) → spacing.sm(8) → 검색창-헤더 간격 축소
-- `sectionHeader`: `marginHorizontal: -spacing.lg` + `paddingHorizontal: spacing.lg` 제거 → 보더가 콘텐츠 영역 안에서만 표시
+- 기존: 날짜 범위만으로 필터링 (`getRandomEntriesByDateRange`, `getCountByDateRange`)
+- 변경: 태그+날짜 복합 필터 (`RelayFilters` 인터페이스, `getRandomEntriesByFilters`, `getCountByFilters`)
+- `RelayFilters.tag`: `undefined`=전체, `''`=태그없음, `'xxx'`=특정 태그
+- 날짜 범위도 선택사항으로 변경 (필터 없이 전체 단어 복습 가능)
+
+## SRS 세션 UI 간소화
+
+- `SessionHeader` 컴포넌트 제거, 닫기 버튼(✕)을 `CountBar`에 통합
+- 타이틀 텍스트 제거 → N/L/R 카운트만 표시하는 미니멀 헤더
+
+## 확장프로그램 기본 태그
+
+- `vocab-modal.ts`: 새 단어 추가 시 `selectedTags` 초기값 `[]` → `['community']`
+- `renderTagChips()` 즉시 호출하여 UI에 반영
+
+## 관련 파일
+
+- `packages/mobile/src/db/queries.ts` — RelayFilters, getRandomEntriesByFilters, getCountByFilters
+- `packages/mobile/src/study/RelaySession.tsx` — 필터 선택 UI (태그 칩 + 캘린더 + 프리셋)
+- `packages/mobile/src/study/SrsSession.tsx` — CountBar에 닫기 버튼 통합
+- `packages/mobile/app/(tabs)/vocab.tsx` — paddingBottom 미세 조정
+- `packages/extension/src/content/vocab/vocab-modal.ts` — 기본 태그 community
+
+# Plan
+
+## Decisions
+
+- 릴레이 phase 이름 `date-select` → `filter-select`로 변경 (날짜만이 아닌 복합 필터)
+- 태그 칩은 수평 스크롤 가능한 행으로 배치 (전체 / 각 태그 / 태그 없음)
+- "전체 기간" 프리셋은 startDate/endDate를 빈 문자열로 설정하여 날짜 필터 해제
+- SRS 세션에서 타이틀 제거: 컨텍스트 없이도 화면 목적이 명확하므로 공간 절약 우선
+- 확장프로그램 기본 태그 `community`: 커뮤니티 발견 단어가 주요 사용 사례
+
+## Steps
+
+- [ ] 빌드 확인 (extension + mobile)
+- [ ] 실기기 테스트
 
 # Progress
 
-- [x] 태그 필터 행 수직 중앙 정렬
-- [x] 검색창 ↔ 섹션 헤더 간격 축소
-- [x] 섹션 헤더 보더 좌우 끝 제거
-- [ ] 실기기에서 최종 확인
+- [x] queries.ts에 RelayFilters 복합 필터 쿼리 추가
+- [x] RelaySession 태그 필터 UI + 날짜 선택사항화
+- [x] SrsSession 헤더 간소화 (CountBar + 닫기 통합)
+- [x] Extension vocab-modal 기본 태그 community 설정
+- [ ] 빌드 확인
+- [ ] 실기기 테스트

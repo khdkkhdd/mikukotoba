@@ -41,6 +41,69 @@ async function fetchUserEmail(accessToken: string): Promise<string> {
   return info.email || '';
 }
 
+/**
+ * Silent refresh: prompt=none으로 새 토큰 획득 시도.
+ * - 성공 → 새 access_token 반환
+ * - 영구 에러 (권한 취소, interaction_required 등) → 토큰 삭제, null 반환
+ * - 일시적 에러 (네트워크, 타임아웃 등) → 토큰 유지, null 반환
+ */
+async function silentRefresh(token: StoredToken): Promise<string | null> {
+  try {
+    const clientId = await getClientId();
+    if (!clientId) return null;
+    const redirectUrl = getRedirectUrl();
+
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('redirect_uri', redirectUrl);
+    authUrl.searchParams.set('response_type', 'token');
+    authUrl.searchParams.set('scope', SCOPES);
+    authUrl.searchParams.set('prompt', 'none');
+
+    const responseUrl = await chrome.identity.launchWebAuthFlow({
+      url: authUrl.toString(),
+      interactive: false,
+    });
+
+    if (!responseUrl) {
+      // 응답 없음 → 영구 에러 (사용자 세션 만료 등)
+      await clearToken();
+      return null;
+    }
+
+    // error 파라미터 확인 (Google이 fragment에 에러 반환)
+    const hashParams = new URLSearchParams(
+      responseUrl.includes('#') ? responseUrl.split('#')[1] : ''
+    );
+    const error = hashParams.get('error');
+    if (error) {
+      // interaction_required, consent_required, login_required → 영구 에러
+      await clearToken();
+      return null;
+    }
+
+    const accessToken = hashParams.get('access_token');
+    const expiresIn = parseInt(hashParams.get('expires_in') || '3600', 10);
+
+    if (!accessToken) {
+      await clearToken();
+      return null;
+    }
+
+    await storeToken({
+      access_token: accessToken,
+      expires_at: Date.now() + expiresIn * 1000 - 60_000,
+      email: token.email,
+    });
+
+    return accessToken;
+  } catch {
+    // 네트워크 에러, 타임아웃, 확장 리로드 등 일시적 에러
+    // → 토큰 유지 (다음 시도에서 재시도 가능)
+    return null;
+  }
+}
+
 export const DriveAuth = {
   async login(): Promise<DriveStatus> {
     const clientId = await getClientId();
@@ -106,55 +169,23 @@ export const DriveAuth = {
     }
 
     // Token expired — try silent re-auth
-    try {
-      const clientId = await getClientId();
-      if (!clientId) return null;
-      const redirectUrl = getRedirectUrl();
-
-      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      authUrl.searchParams.set('client_id', clientId);
-      authUrl.searchParams.set('redirect_uri', redirectUrl);
-      authUrl.searchParams.set('response_type', 'token');
-      authUrl.searchParams.set('scope', SCOPES);
-      authUrl.searchParams.set('prompt', 'none');
-
-      const responseUrl = await chrome.identity.launchWebAuthFlow({
-        url: authUrl.toString(),
-        interactive: false,
-      });
-
-      if (!responseUrl) return null;
-
-      const hashParams = new URLSearchParams(
-        responseUrl.includes('#') ? responseUrl.split('#')[1] : ''
-      );
-      const accessToken = hashParams.get('access_token');
-      const expiresIn = parseInt(hashParams.get('expires_in') || '3600', 10);
-
-      if (!accessToken) return null;
-
-      await storeToken({
-        access_token: accessToken,
-        expires_at: Date.now() + expiresIn * 1000 - 60_000,
-        email: token.email,
-      });
-
-      return accessToken;
-    } catch {
-      // Silent re-auth failed
-      await clearToken();
-      return null;
-    }
+    return silentRefresh(token);
   },
 
   async getStatus(): Promise<DriveStatus> {
     const token = await getStoredToken();
     if (!token) return { loggedIn: false };
 
-    const isValid = Date.now() < token.expires_at;
-    return {
-      loggedIn: isValid,
-      email: isValid ? token.email : undefined,
-    };
+    // 토큰이 아직 유효하면 바로 반환
+    if (Date.now() < token.expires_at) {
+      return { loggedIn: true, email: token.email };
+    }
+
+    // 만료된 토큰 → silent refresh 시도 후 결과 반환
+    const refreshed = await silentRefresh(token);
+    if (refreshed) {
+      return { loggedIn: true, email: token.email };
+    }
+    return { loggedIn: false };
   },
 };

@@ -111,7 +111,8 @@ export async function getTotalCount(db: SQLiteDatabase): Promise<number> {
 
 // 오늘 처음 학습한 새 카드 수 (일일 한도 추적용)
 export async function getTodayNewCardCount(db: SQLiteDatabase): Promise<number> {
-  const today = new Date().toISOString().slice(0, 10);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
   const result = await db.getFirstAsync<{ count: number }>(
     `SELECT COUNT(*) as count FROM (
        SELECT vocab_id
@@ -119,9 +120,105 @@ export async function getTodayNewCardCount(db: SQLiteDatabase): Promise<number> 
        GROUP BY vocab_id
        HAVING MIN(reviewed_at) >= ?
      )`,
-    [`${today}T00:00:00.000Z`]
+    [todayStart.toISOString()]
   );
   return result?.count ?? 0;
+}
+
+// 월별 FSRS card_state 조회 (vocab.date_added 기준)
+export async function getCardStatesByMonth(
+  db: SQLiteDatabase,
+  month: string
+): Promise<Record<string, DriveCardState>> {
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT cs.* FROM card_state cs
+     JOIN vocab v ON v.id = cs.vocab_id
+     WHERE substr(v.date_added, 1, 7) = ?`,
+    [month]
+  );
+  const result: Record<string, DriveCardState> = {};
+  for (const row of rows) {
+    result[row.vocab_id as string] = {
+      state: row.state as number,
+      due: row.due as string,
+      stability: row.stability as number,
+      difficulty: row.difficulty as number,
+      elapsed_days: row.elapsed_days as number,
+      scheduled_days: row.scheduled_days as number,
+      reps: row.reps as number,
+      lapses: row.lapses as number,
+      last_review: (row.last_review as string) ?? null,
+      learning_steps: (row.learning_steps as number) ?? 0,
+    };
+  }
+  return result;
+}
+
+// 월별 리뷰 로그 조회
+export async function getReviewLogsByMonth(
+  db: SQLiteDatabase,
+  month: string
+): Promise<DriveReviewLogEntry[]> {
+  const startDate = `${month}-01T00:00:00.000Z`;
+  // 다음 월 계산
+  const [y, m] = month.split('-').map(Number);
+  const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  const endDate = `${nextMonth}-01T00:00:00.000Z`;
+
+  return db.getAllAsync<DriveReviewLogEntry>(
+    `SELECT vocab_id, rating, reviewed_at FROM review_log
+     WHERE reviewed_at >= ? AND reviewed_at < ?
+     ORDER BY reviewed_at ASC`,
+    [startDate, endDate]
+  );
+}
+
+// 월별 리뷰 로그 교체 (해당 월만 DELETE 후 INSERT)
+export async function replaceReviewLogsByMonth(
+  db: SQLiteDatabase,
+  month: string,
+  logs: DriveReviewLogEntry[]
+): Promise<void> {
+  const startDate = `${month}-01T00:00:00.000Z`;
+  const [y, m] = month.split('-').map(Number);
+  const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+  const endDate = `${nextMonth}-01T00:00:00.000Z`;
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'DELETE FROM review_log WHERE reviewed_at >= ? AND reviewed_at < ?',
+      [startDate, endDate]
+    );
+    for (const log of logs) {
+      await db.runAsync(
+        `INSERT INTO review_log (vocab_id, rating, reviewed_at)
+         SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM vocab WHERE id = ?)`,
+        [log.vocab_id, log.rating, log.reviewed_at, log.vocab_id]
+      );
+    }
+  });
+}
+
+// dirty vocabIds → dateAdded 월(YYYY-MM) Set 반환
+export async function getVocabMonthsByIds(
+  db: SQLiteDatabase,
+  ids: string[]
+): Promise<Set<string>> {
+  const months = new Set<string>();
+  // 배치 처리 (SQLite 파라미터 한도 대응)
+  const batchSize = 500;
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const placeholders = batch.map(() => '?').join(',');
+    const rows = await db.getAllAsync<{ month: string }>(
+      `SELECT DISTINCT substr(date_added, 1, 7) as month FROM vocab WHERE id IN (${placeholders})`,
+      batch
+    );
+    for (const row of rows) {
+      months.add(row.month);
+    }
+  }
+  return months;
 }
 
 // Review log 동기화
@@ -399,20 +496,34 @@ export async function getNewCardsWithEntriesByTag(
     .slice(0, limit);
 }
 
-export async function getDueCountByTag(db: SQLiteDatabase): Promise<Record<string, number>> {
+export interface TagStudyCounts { due: number; new: number }
+
+export async function getStudyCountsByTag(db: SQLiteDatabase): Promise<Record<string, TagStudyCounts>> {
   const now = new Date().toISOString();
-  const rows = await db.getAllAsync<{ tags: string }>(
+  const counts: Record<string, TagStudyCounts> = {};
+  const ensure = (t: string) => counts[t] ??= { due: 0, new: 0 };
+
+  // due cards
+  const dueRows = await db.getAllAsync<{ tags: string }>(
     `SELECT v.tags FROM card_state cs JOIN vocab v ON v.id = cs.vocab_id WHERE cs.due <= ?`,
     [now]
   );
-  const counts: Record<string, number> = {};
-  let untagged = 0;
-  for (const row of rows) {
+  for (const row of dueRows) {
     const tags = parseTags(row.tags);
-    if (tags.length === 0) { untagged++; continue; }
-    for (const t of tags) { counts[t] = (counts[t] ?? 0) + 1; }
+    if (tags.length === 0) { ensure('').due++; continue; }
+    for (const t of tags) ensure(t).due++;
   }
-  if (untagged > 0) counts[''] = untagged;
+
+  // new cards (no card_state)
+  const newRows = await db.getAllAsync<{ tags: string }>(
+    `SELECT v.tags FROM vocab v LEFT JOIN card_state cs ON v.id = cs.vocab_id WHERE cs.vocab_id IS NULL`
+  );
+  for (const row of newRows) {
+    const tags = parseTags(row.tags);
+    if (tags.length === 0) { ensure('').new++; continue; }
+    for (const t of tags) ensure(t).new++;
+  }
+
   return counts;
 }
 
@@ -504,6 +615,19 @@ export async function getCountByFilters(
   return getTotalCount(db);
 }
 
+// --- 로컬 날짜 유틸 ---
+
+/** 로컬 타임존 기준 YYYY-MM-DD */
+function localDateStr(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+// SQLite에서 reviewed_at(UTC ISO) → KST 날짜 변환용
+const KST = `'+9 hours'`;
+
 // --- 통계 쿼리 ---
 
 /** 일별 학습 집계 (날짜, 총 카드 수, 등급별 수) */
@@ -523,15 +647,15 @@ export async function getDailyReviewStats(
 ): Promise<DailyStats[]> {
   return db.getAllAsync<DailyStats>(
     `SELECT
-       DATE(reviewed_at) as date,
+       DATE(reviewed_at, ${KST}) as date,
        COUNT(*) as total,
        SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as again,
        SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as hard,
        SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as good,
        SUM(CASE WHEN rating = 4 THEN 1 ELSE 0 END) as easy
      FROM review_log
-     WHERE DATE(reviewed_at) BETWEEN ? AND ?
-     GROUP BY DATE(reviewed_at)
+     WHERE DATE(reviewed_at, ${KST}) BETWEEN ? AND ?
+     GROUP BY DATE(reviewed_at, ${KST})
      ORDER BY date ASC`,
     [startDate, endDate]
   );
@@ -559,7 +683,7 @@ export async function getOverallStats(db: SQLiteDatabase): Promise<OverallStats>
   }>(
     `SELECT
        COUNT(*) as totalReviews,
-       COUNT(DISTINCT DATE(reviewed_at)) as totalDays,
+       COUNT(DISTINCT DATE(reviewed_at, ${KST})) as totalDays,
        SUM(CASE WHEN rating = 1 THEN 1 ELSE 0 END) as again,
        SUM(CASE WHEN rating = 2 THEN 1 ELSE 0 END) as hard,
        SUM(CASE WHEN rating = 3 THEN 1 ELSE 0 END) as good,
@@ -583,12 +707,12 @@ export async function getOverallStats(db: SQLiteDatabase): Promise<OverallStats>
 /** 연속 학습일(스트릭) 계산 */
 export async function getStreak(db: SQLiteDatabase): Promise<{ current: number; longest: number }> {
   const rows = await db.getAllAsync<{ date: string }>(
-    'SELECT DISTINCT DATE(reviewed_at) as date FROM review_log ORDER BY date DESC'
+    `SELECT DISTINCT DATE(reviewed_at, ${KST}) as date FROM review_log ORDER BY date DESC`
   );
 
   if (rows.length === 0) return { current: 0, longest: 0 };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateStr();
   const dates = rows.map((r) => r.date);
 
   // 현재 스트릭: 오늘 또는 어제부터 연속
@@ -628,13 +752,13 @@ export async function getStreak(db: SQLiteDatabase): Promise<{ current: number; 
 function yesterday(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 function daysBeforeDate(dateStr: string, n: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  const [y, m, dd] = dateStr.split('-').map(Number);
+  const d = new Date(y, m - 1, dd - n);
+  return localDateStr(d);
 }
 
 /** 마스터한 단어 수 (Review 상태 + stability >= 30) */

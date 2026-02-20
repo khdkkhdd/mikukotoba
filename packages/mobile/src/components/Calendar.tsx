@@ -219,11 +219,17 @@ export function Calendar(props: CalendarProps) {
 
               // 히트맵 배경색
               let heatBg: string | undefined;
+              let heatIntensity = 0;
               if (heatValue !== undefined && heatValue > 0) {
-                const intensity = Math.min(heatValue / heatmapMax, 1);
-                const alpha = 0.15 + intensity * 0.55; // 0.15 ~ 0.7
-                heatBg = `rgba(201, 107, 79, ${alpha})`;
+                heatIntensity = Math.min(heatValue / heatmapMax, 1);
+                const alpha = 0.15 + heatIntensity * 0.55; // 0.15 ~ 0.7
+                heatBg = `rgba(57, 197, 187, ${alpha})`;
               }
+
+              // 히트맵 농도가 높으면 흰색 텍스트
+              const heatTextStyle = heatIntensity > 0.4 && !isSelected
+                ? { color: '#FFFFFF' }
+                : undefined;
 
               return (
                 <View key={dateStr} style={styles.dayCell}>
@@ -241,7 +247,7 @@ export function Calendar(props: CalendarProps) {
                       styles.dayButton,
                       heatBg ? { backgroundColor: heatBg } : undefined,
                       isSelected && styles.daySelected,
-                      isToday && !isSelected && styles.dayToday,
+                      isToday && !isSelected && !heatBg && styles.dayToday,
                     ]}
                     onPress={() => handleDayPress(dateStr)}
                   >
@@ -250,7 +256,8 @@ export function Calendar(props: CalendarProps) {
                         styles.dayText,
                         colIdx === 0 && styles.sundayText,
                         isSelected && styles.dayTextSelected,
-                        isToday && !isSelected && styles.dayTextToday,
+                        isToday && !isSelected && !heatBg && styles.dayTextToday,
+                        heatTextStyle,
                       ]}
                     >
                       {day}

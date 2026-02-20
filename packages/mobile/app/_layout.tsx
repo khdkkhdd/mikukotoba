@@ -39,7 +39,7 @@ export default function RootLayout() {
     <DatabaseContext.Provider value={database}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="vocab/[id]" options={{ headerShown: true, title: '단어 상세' }} />
+        <Stack.Screen name="vocab/[id]" options={{ headerShown: true, title: '단어 상세', headerBackTitle: '뒤로' }} />
         <Stack.Screen name="add" options={{ presentation: 'modal', headerShown: true, title: '단어 추가' }} />
       </Stack>
     </DatabaseContext.Provider>

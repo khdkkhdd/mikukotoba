@@ -3,6 +3,7 @@ import type { VocabEntry, DrivePartitionContent, DriveSyncMeta, SyncResult, Driv
 import {
   DriveAPI,
   mergeEntries,
+  countChangedEntries,
   cleanTombstones,
   mergeFsrsStates,
   mergeReviewLogs,
@@ -95,14 +96,17 @@ export async function pullFromDrive(database: SQLiteDatabase): Promise<SyncResul
       if (fileId) {
         try {
           const remote = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
+
           const localEntries = await db.getEntriesByDate(database, date);
           const currentTombstones = await db.getTombstones(database);
 
-          const merged = mergeEntries(localEntries, remote.entries, currentTombstones);
+          // Pull: remote 우선 (인자 순서 반전 → equal timestamp에서 remote 승리)
+          const merged = mergeEntries(remote.entries, localEntries, currentTombstones);
+          const partitionChanges = countChangedEntries(localEntries, merged);
           await db.upsertEntries(database, merged);
           meta.partitionVersions[date] = remoteVersion;
-          pulled += merged.length;
-          changed = true;
+          pulled += partitionChanges;
+          if (partitionChanges > 0) changed = true;
         } catch (e) {
           console.error('[SYNC] failed to pull partition', date, e);
         }
@@ -127,15 +131,29 @@ export async function pushToDrive(database: SQLiteDatabase, dates: string[]): Pr
   }
 
   const meta = await getLocalSyncMeta(database);
+  const tombstones = await db.getTombstones(database);
   let pushed = 0;
 
   for (const date of dates) {
-    const entries = await db.getEntriesByDate(database, date);
-    const version = Date.now();
-
-    const content: DrivePartitionContent = { date, entries, version };
+    let entries = await db.getEntriesByDate(database, date);
     const fileName = drivePartitionName(date);
     const fileId = await ensureDriveFileId(token, meta, fileName);
+
+    // Merge-before-push: Drive 데이터와 머지하여 덮어쓰기 방지
+    let remoteEntries: VocabEntry[] = [];
+    if (fileId) {
+      try {
+        const remote = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
+        remoteEntries = remote.entries;
+        entries = mergeEntries(entries, remoteEntries, tombstones);
+        await db.upsertEntries(database, entries);
+      } catch {
+        // Drive 읽기 실패 → 로컬만 push
+      }
+    }
+
+    const version = Date.now();
+    const content: DrivePartitionContent = { date, entries, version };
 
     if (fileId) {
       await DriveAPI.updateFile(token, fileId, content);
@@ -145,17 +163,35 @@ export async function pushToDrive(database: SQLiteDatabase, dates: string[]): Pr
     }
 
     meta.partitionVersions[date] = version;
-    pushed += entries.length;
+    pushed += countChangedEntries(remoteEntries, entries);
   }
 
-  // Update remote metadata
-  const tombstones = await db.getTombstones(database);
+  // Merge metadata with remote (max version per date → 버전 역행 방지)
+  const metaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
+  let remoteVersions: Record<string, number> = {};
+  let remoteDeleted: Record<string, number> = {};
+
+  if (metaFileId) {
+    try {
+      const remoteMeta = await DriveAPI.getFile<DriveSyncMeta>(token, metaFileId);
+      remoteVersions = remoteMeta.partitionVersions || {};
+      remoteDeleted = remoteMeta.deletedEntries || {};
+    } catch {
+      // 리모트 읽기 실패 → 로컬만 사용
+    }
+  }
+
+  const mergedVersions = { ...remoteVersions };
+  for (const [date, version] of Object.entries(meta.partitionVersions)) {
+    mergedVersions[date] = Math.max(version, mergedVersions[date] || 0);
+  }
+  meta.partitionVersions = mergedVersions;
+
   const remoteSyncMeta: DriveSyncMeta = {
-    partitionVersions: { ...meta.partitionVersions },
-    deletedEntries: cleanTombstones(tombstones),
+    partitionVersions: mergedVersions,
+    deletedEntries: cleanTombstones({ ...remoteDeleted, ...tombstones }),
   };
 
-  const metaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
   if (metaFileId) {
     await DriveAPI.updateFile(token, metaFileId, remoteSyncMeta);
   } else {

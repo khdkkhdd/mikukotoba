@@ -125,10 +125,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
-  relayCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.warning,
-  },
+  relayCard: {},
   modeCardPressed: {
     backgroundColor: colors.borderLight,
   },

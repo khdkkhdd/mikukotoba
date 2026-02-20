@@ -217,7 +217,9 @@ export type MessageType =
   | { type: 'DRIVE_LOGOUT' }
   | { type: 'DRIVE_GET_STATUS' }
   | { type: 'SYNC_PULL' }
-  | { type: 'SYNC_GET_STATUS' };
+  | { type: 'SYNC_PUSH' }
+  | { type: 'SYNC_GET_STATUS' }
+  | { type: 'SYNC_DIAGNOSE' };
 
 // 기본 설정값
 export const DEFAULT_SETTINGS: UserSettings = {

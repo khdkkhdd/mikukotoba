@@ -1,54 +1,62 @@
 # Goal
 
-릴레이(자유 복습) 세션에 태그 필터 추가 + SRS 세션 헤더 간소화 + 확장프로그램 기본 태그 설정.
+동기화 카운팅 정확성: pull/push 시 파티션 수나 전체 엔트리 수가 아닌, 실제 변경된 엔트리 수만 표시.
 
 # Research
 
-## 릴레이 세션 필터 확장
+## 동기화 아키텍처
 
-- 기존: 날짜 범위만으로 필터링 (`getRandomEntriesByDateRange`, `getCountByDateRange`)
-- 변경: 태그+날짜 복합 필터 (`RelayFilters` 인터페이스, `getRandomEntriesByFilters`, `getCountByFilters`)
-- `RelayFilters.tag`: `undefined`=전체, `''`=태그없음, `'xxx'`=특정 태그
-- 날짜 범위도 선택사항으로 변경 (필터 없이 전체 단어 복습 가능)
+### mergeEntries 인자 순서 규칙
+- `mergeEntries(A, B, tombstones)`: A가 먼저 map에, B는 timestamp이 더 클 때만 덮어씀 → **A 우선 (equal timestamp에서 A 승리)**
+- Pull: `mergeEntries(remote, local, tombstones)` → remote 우선
+- Push: `mergeEntries(local, remote, tombstones)` → local 우선
 
-## SRS 세션 UI 간소화
+### 삭제 처리
+- tombstone 기반: `deletedEntries[entryId] = Date.now()`
+- mergeEntries에서 tombstone이 있는 엔트리는 양쪽 모두 제외
+- tombstone은 Drive 메타데이터에 기록되어 양방향 전파
+- 충돌 시 delete가 edit보다 우선 (tombstone이 timestamp 비교를 선행)
+- TTL 30일 후 tombstone 정리
 
-- `SessionHeader` 컴포넌트 제거, 닫기 버튼(✕)을 `CountBar`에 통합
-- 타이틀 텍스트 제거 → N/L/R 카운트만 표시하는 미니멀 헤더
+### 카운팅 (수정 완료)
+- `countChangedEntries(before, after)`: 추가 + 수정(timestamp 변경) + 삭제(before에만 있는 것) 카운트
+- Pull: `countChangedEntries(localEntries, merged)` — 로컬 대비 변경분
+- Push: `countChangedEntries(remoteEntries, merged)` — Drive 대비 변경분
 
-## 확장프로그램 기본 태그
+## 동기화 시나리오 검증 결과
 
-- `vocab-modal.ts`: 새 단어 추가 시 `selectedTags` 초기값 `[]` → `['community']`
-- `renderTagChips()` 즉시 호출하여 UI에 반영
+| 시나리오 | 동기화 | 카운트 |
+|----------|--------|--------|
+| 추가 | 정상 | 정상 |
+| 수정 | 정상 (last-write-wins) | 정상 |
+| 삭제 | 정상 (tombstone 전파) | 정상 |
+| 충돌: 양쪽 수정 | 최신 timestamp 승 | 정상 |
+| 충돌: 삭제 vs 수정 | 삭제 승리 | 정상 |
 
 ## 관련 파일
 
-- `packages/mobile/src/db/queries.ts` — RelayFilters, getRandomEntriesByFilters, getCountByFilters
-- `packages/mobile/src/study/RelaySession.tsx` — 필터 선택 UI (태그 칩 + 캘린더 + 프리셋)
-- `packages/mobile/src/study/SrsSession.tsx` — CountBar에 닫기 버튼 통합
-- `packages/mobile/app/(tabs)/vocab.tsx` — paddingBottom 미세 조정
-- `packages/extension/src/content/vocab/vocab-modal.ts` — 기본 태그 community
+- `packages/shared/src/sync-core.ts` — mergeEntries, countChangedEntries
+- `packages/extension/src/core/drive-sync.ts` — pull, pushPartitionImmediate, pushAll
+- `packages/mobile/src/services/sync.ts` — pullFromDrive, pushToDrive
+- `packages/mobile/src/services/sync-manager.ts` — fullSync
 
 # Plan
 
 ## Decisions
 
-- 릴레이 phase 이름 `date-select` → `filter-select`로 변경 (날짜만이 아닌 복합 필터)
-- 태그 칩은 수평 스크롤 가능한 행으로 배치 (전체 / 각 태그 / 태그 없음)
-- "전체 기간" 프리셋은 startDate/endDate를 빈 문자열로 설정하여 날짜 필터 해제
-- SRS 세션에서 타이틀 제거: 컨텍스트 없이도 화면 목적이 명확하므로 공간 절약 우선
-- 확장프로그램 기본 태그 `community`: 커뮤니티 발견 단어가 주요 사용 사례
+- countChangedEntries를 shared에 배치하여 양쪽에서 공유
+- pushPartitionImmediate 반환 타입을 void → number로 변경하여 변경 엔트리 수 반환
+- 삭제 카운팅: before에는 있지만 after에 없는 엔트리도 changed에 포함
+- 모바일 fullSync는 여전히 allDates를 push하지만 카운트는 실제 변경분만 표시
 
 ## Steps
 
-- [ ] 빌드 확인 (extension + mobile)
-- [ ] 실기기 테스트
+완료.
 
 # Progress
 
-- [x] queries.ts에 RelayFilters 복합 필터 쿼리 추가
-- [x] RelaySession 태그 필터 UI + 날짜 선택사항화
-- [x] SrsSession 헤더 간소화 (CountBar + 닫기 통합)
-- [x] Extension vocab-modal 기본 태그 community 설정
-- [ ] 빌드 확인
-- [ ] 실기기 테스트
+- [x] `countChangedEntries` 헬퍼 추가 (shared/sync-core.ts)
+- [x] 모바일 pull/push 카운팅 수정 (sync.ts)
+- [x] 확장프로그램 pull/push 카운팅 수정 (drive-sync.ts, pushPartitionImmediate → number 반환)
+- [x] 삭제 카운팅 추가 (before에만 있는 엔트리도 카운트)
+- [x] 양쪽 빌드/타입체크 통과

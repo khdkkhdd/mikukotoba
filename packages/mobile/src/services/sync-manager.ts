@@ -83,7 +83,7 @@ export async function fullSync(db: SQLiteDatabase): Promise<{ vocabPulled: numbe
   const fsrsPulled = await pullFsrsState(db);
   await pullReviewLogs(db);
 
-  // push all local dates
+  // push all local dates (merge-before-push로 Drive 데이터 보존)
   const allDates = await getAllVocabDates(db);
   const vocabPushed = await pushToDrive(db, allDates);
   await pushFsrsState(db);

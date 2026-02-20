@@ -342,6 +342,26 @@ async function handleMessage(
       break;
     }
 
+    case 'SYNC_PUSH': {
+      try {
+        const pushed = await DriveSync.pushAll();
+        sendResponse({ success: true, payload: { pushed } });
+      } catch (err) {
+        sendResponse({ success: false, message: String(err) });
+      }
+      break;
+    }
+
+    case 'SYNC_DIAGNOSE': {
+      try {
+        const diag = await DriveSync.diagnose();
+        sendResponse({ success: true, payload: diag });
+      } catch (err) {
+        sendResponse({ success: false, message: String(err) });
+      }
+      break;
+    }
+
     case 'VOCAB_SAVE': {
       await VocabStorage.addEntry(message.payload);
       // Auto-add to glossary: vocab → glossary sync

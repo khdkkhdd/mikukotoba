@@ -106,6 +106,33 @@ export function mergeReviewLogs(
 }
 
 /**
+ * Count entries that differ between `before` and `after`.
+ * Includes additions, updates (timestamp change), and deletions.
+ */
+export function countChangedEntries(
+  before: VocabEntry[],
+  after: VocabEntry[]
+): number {
+  const beforeMap = new Map<string, number>();
+  for (const entry of before) {
+    beforeMap.set(entry.id, entry.timestamp);
+  }
+  const afterIds = new Set<string>();
+  let changed = 0;
+  for (const entry of after) {
+    afterIds.add(entry.id);
+    const prevTs = beforeMap.get(entry.id);
+    if (prevTs === undefined || prevTs !== entry.timestamp) {
+      changed++;
+    }
+  }
+  for (const id of beforeMap.keys()) {
+    if (!afterIds.has(id)) changed++;
+  }
+  return changed;
+}
+
+/**
  * Clean tombstones older than 30 days.
  */
 export function cleanTombstones(deleted: Record<string, number>): Record<string, number> {

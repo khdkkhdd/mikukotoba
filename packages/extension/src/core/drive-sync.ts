@@ -4,6 +4,7 @@ import { DriveAuth } from './drive-auth';
 import { DriveAPI } from '@mikukotoba/shared';
 import {
   mergeEntries,
+  countChangedEntries,
   cleanTombstones,
   drivePartitionName,
   DRIVE_META_FILE,
@@ -102,6 +103,19 @@ async function ensureDriveFileId(
 export const DriveSync = {
   getMetadata: getLocalMeta,
 
+  async pushAll(): Promise<number> {
+    const index = await getLocalIndex();
+    let pushed = 0;
+    for (const date of index.dates) {
+      try {
+        pushed += await pushPartitionImmediate(date);
+      } catch {
+        // Best effort per partition
+      }
+    }
+    return pushed;
+  },
+
   pushPartition(date: string): Promise<void> {
     return new Promise((resolve) => {
       const existing = pushTimers.get(date);
@@ -130,10 +144,11 @@ export const DriveSync = {
     const token = await DriveAuth.getValidToken();
     if (!token) return { changed: false, pulled: 0, pushed: 0 };
 
-    const meta = await getLocalMeta();
+    let meta = await getLocalMeta();
     let pulled = 0;
     let pushed = 0;
     let changed = false;
+    let needMetaPush = false;
 
     let remoteMeta: DriveSyncMeta = { partitionVersions: {}, deletedEntries: {} };
     const remoteMetaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
@@ -172,30 +187,78 @@ export const DriveSync = {
             const remote = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
             const localEntries = await getLocalEntries(date);
 
+            // Pull: remote 우선 (인자 순서 반전 → equal timestamp에서 remote 승리)
             const merged = mergeEntries(
-              localEntries,
               remote.entries,
+              localEntries,
               meta.deletedEntries
             );
 
+            const pullChanges = countChangedEntries(localEntries, merged);
             await saveLocalEntries(date, merged);
-            meta.partitionVersions[date] = remoteVersion;
-            pulled++;
-            changed = true;
+            pulled += pullChanges;
+            if (pullChanges > 0) changed = true;
+
+            // Push-back: 로컬 엔트리가 merge에 반영됐으면 Drive에도 반영
+            if (localEntries.length > 0) {
+              const pushChanges = countChangedEntries(remote.entries, merged);
+              const version = Date.now();
+              await DriveAPI.updateFile(token, fileId, { date, entries: merged, version });
+              meta.partitionVersions[date] = version;
+              pushed += pushChanges;
+              needMetaPush = true;
+            } else {
+              meta.partitionVersions[date] = remoteVersion;
+            }
           } catch {
             // Skip this partition on error
           }
         }
       } else if (localVersion > remoteVersion) {
-        await pushPartitionImmediate(date);
-        pushed++;
+        pushed += await pushPartitionImmediate(date);
+        // pushPartitionImmediate가 meta를 별도로 저장하므로 최신 상태 반영
+        meta = await getLocalMeta();
       } else if (localVersion === 0 && remoteVersion === 0) {
         // Never synced — push if local entries exist
         const localEntries = await getLocalEntries(date);
         if (localEntries.length > 0) {
-          await pushPartitionImmediate(date);
-          pushed++;
+          pushed += await pushPartitionImmediate(date);
+          meta = await getLocalMeta();
         }
+      }
+    }
+
+    // Pull-merge push-back 후 Drive 메타 업데이트
+    if (needMetaPush) {
+      const metaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
+
+      // Remote와 머지 (max version per date)
+      let remoteVersions: Record<string, number> = {};
+      let remoteDeleted: Record<string, number> = {};
+      if (metaFileId) {
+        try {
+          const existing = await DriveAPI.getFile<DriveSyncMeta>(token, metaFileId);
+          remoteVersions = existing.partitionVersions || {};
+          remoteDeleted = existing.deletedEntries || {};
+        } catch { /* ignore */ }
+      }
+
+      const mergedVersions = { ...remoteVersions };
+      for (const [d, v] of Object.entries(meta.partitionVersions)) {
+        mergedVersions[d] = Math.max(v, mergedVersions[d] || 0);
+      }
+      meta.partitionVersions = mergedVersions;
+
+      const syncMeta: DriveSyncMeta = {
+        partitionVersions: mergedVersions,
+        deletedEntries: cleanTombstones({ ...remoteDeleted, ...meta.deletedEntries }),
+      };
+
+      if (metaFileId) {
+        await DriveAPI.updateFile(token, metaFileId, syncMeta);
+      } else {
+        const newId = await DriveAPI.createFile(token, DRIVE_META_FILE, syncMeta);
+        meta.driveFileIds[DRIVE_META_FILE] = newId;
       }
     }
 
@@ -210,22 +273,104 @@ export const DriveSync = {
       await rebuildSearchIndex();
     }
 
-    return { changed, pulled, pushed };
+    return { changed: changed || pulled > 0 || pushed > 0, pulled, pushed };
+  },
+
+  async diagnose(): Promise<{
+    local: { total: number; withTags: number; sample: Array<{ word: string; tags: string[]; timestamp: number }> };
+    drive: { total: number; withTags: number; sample: Array<{ word: string; tags: string[]; timestamp: number }> };
+    versions: { local: Record<string, number>; remote: Record<string, number> };
+  }> {
+    const token = await DriveAuth.getValidToken();
+    const meta = await getLocalMeta();
+    const localIndex = await getLocalIndex();
+
+    // Local 진단
+    const localAll: VocabEntry[] = [];
+    for (const date of localIndex.dates) {
+      const entries = await getLocalEntries(date);
+      localAll.push(...entries);
+    }
+
+    // Drive 진단
+    const driveAll: VocabEntry[] = [];
+    let remoteMeta: DriveSyncMeta = { partitionVersions: {}, deletedEntries: {} };
+
+    if (token) {
+      const metaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
+      if (metaFileId) {
+        try {
+          remoteMeta = await DriveAPI.getFile<DriveSyncMeta>(token, metaFileId);
+        } catch { /* ignore */ }
+      }
+
+      const allDates = new Set([
+        ...localIndex.dates,
+        ...Object.keys(remoteMeta.partitionVersions),
+      ]);
+
+      for (const date of allDates) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+        const fileName = drivePartitionName(date);
+        const fileId = await ensureDriveFileId(token, meta, fileName);
+        if (fileId) {
+          try {
+            const content = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
+            driveAll.push(...content.entries);
+          } catch { /* ignore */ }
+        }
+      }
+    }
+
+    const sample = (arr: VocabEntry[]) => arr.slice(0, 3).map(e => ({
+      word: e.word, tags: e.tags ?? [], timestamp: e.timestamp,
+    }));
+
+    return {
+      local: {
+        total: localAll.length,
+        withTags: localAll.filter(e => (e.tags ?? []).length > 0).length,
+        sample: sample(localAll),
+      },
+      drive: {
+        total: driveAll.length,
+        withTags: driveAll.filter(e => (e.tags ?? []).length > 0).length,
+        sample: sample(driveAll),
+      },
+      versions: {
+        local: meta.partitionVersions,
+        remote: remoteMeta.partitionVersions,
+      },
+    };
   },
 };
 
-async function pushPartitionImmediate(date: string): Promise<void> {
+async function pushPartitionImmediate(date: string): Promise<number> {
   const token = await DriveAuth.getValidToken();
-  if (!token) return;
+  if (!token) return 0;
 
   const meta = await getLocalMeta();
-  const entries = await getLocalEntries(date);
+  let entries = await getLocalEntries(date);
   const version = Date.now();
-
-  const content: DrivePartitionContent = { date, entries, version };
 
   const fileName = drivePartitionName(date);
   const fileId = await ensureDriveFileId(token, meta, fileName);
+
+  // Merge-before-push: Drive 데이터와 머지하여 덮어쓰기 방지
+  let remoteEntries: VocabEntry[] = [];
+  if (fileId) {
+    try {
+      const remote = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
+      remoteEntries = remote.entries;
+      entries = mergeEntries(entries, remoteEntries, meta.deletedEntries);
+      await saveLocalEntries(date, entries);
+    } catch {
+      // Drive 읽기 실패 → 로컬만 push
+    }
+  }
+
+  const changedCount = countChangedEntries(remoteEntries, entries);
+  const content: DrivePartitionContent = { date, entries, version };
 
   if (fileId) {
     await DriveAPI.updateFile(token, fileId, content);
@@ -237,12 +382,32 @@ async function pushPartitionImmediate(date: string): Promise<void> {
   meta.partitionVersions[date] = version;
   meta.lastSyncTimestamp = Date.now();
 
+  // Merge metadata with remote (max version per date → 버전 역행 방지)
+  const metaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
+  let remoteVersions: Record<string, number> = {};
+  let remoteDeleted: Record<string, number> = {};
+
+  if (metaFileId) {
+    try {
+      const existing = await DriveAPI.getFile<DriveSyncMeta>(token, metaFileId);
+      remoteVersions = existing.partitionVersions || {};
+      remoteDeleted = existing.deletedEntries || {};
+    } catch {
+      // 리모트 읽기 실패
+    }
+  }
+
+  const mergedVersions = { ...remoteVersions };
+  for (const [d, v] of Object.entries(meta.partitionVersions)) {
+    mergedVersions[d] = Math.max(v, mergedVersions[d] || 0);
+  }
+  meta.partitionVersions = mergedVersions;
+
   const remoteSyncMeta: DriveSyncMeta = {
-    partitionVersions: { ...meta.partitionVersions },
-    deletedEntries: cleanTombstones(meta.deletedEntries),
+    partitionVersions: mergedVersions,
+    deletedEntries: cleanTombstones({ ...remoteDeleted, ...meta.deletedEntries }),
   };
 
-  const metaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
   if (metaFileId) {
     await DriveAPI.updateFile(token, metaFileId, remoteSyncMeta);
   } else {
@@ -260,6 +425,7 @@ async function pushPartitionImmediate(date: string): Promise<void> {
   }
 
   await saveLocalMeta(meta);
+  return changedCount;
 }
 
 async function rebuildLocalIndex(): Promise<void> {

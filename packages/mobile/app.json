@@ -17,7 +17,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.mikukotoba.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.582194695290-f6rcct950bphqemdgf3mmi2ruu68nbrh"
+            ]
+          }
+        ]
       }
     },
     "android": {

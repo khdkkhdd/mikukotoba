@@ -16,6 +16,7 @@ export { DriveAPI } from './drive-api';
 
 export {
   mergeEntries,
+  countChangedEntries,
   cleanTombstones,
   mergeFsrsStates,
   mergeReviewLogs,

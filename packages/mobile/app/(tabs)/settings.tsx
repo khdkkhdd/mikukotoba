@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet, Switch, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, Text, Pressable, TextInput, Keyboard, StyleSheet, Switch, Alert } from 'react-native';
 import { useDatabase } from '../../src/components/DatabaseContext';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { fullSync } from '../../src/services/sync-manager';
@@ -20,6 +21,8 @@ export default function SettingsScreen() {
     lastSyncTime,
   } = useSettingsStore();
   const refreshVocab = useVocabStore((s) => s.refresh);
+  const [editingDaily, setEditingDaily] = useState(false);
+  const [dailyInput, setDailyInput] = useState('');
 
   const handleGoogleSignIn = async () => {
     try {
@@ -58,7 +61,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <Pressable style={styles.container} onPress={Keyboard.dismiss}>
       <Text style={styles.pageTitle}>설정</Text>
 
       <View style={styles.section}>
@@ -94,21 +97,48 @@ export default function SettingsScreen() {
           <View style={styles.stepper}>
             <Pressable
               style={styles.stepperBtn}
-              onPress={() => setDailyNewCards(Math.max(1, dailyNewCards - 5))}
+              onPress={() => setDailyNewCards(Math.max(1, dailyNewCards - 5), database)}
             >
               <Text style={styles.stepperText}>-</Text>
             </Pressable>
-            <Text style={styles.stepperValue}>{dailyNewCards}</Text>
+            {editingDaily ? (
+              <TextInput
+                style={styles.stepperInput}
+                value={dailyInput}
+                onChangeText={setDailyInput}
+                keyboardType="number-pad"
+                autoFocus
+                selectTextOnFocus
+                onBlur={() => {
+                  const n = parseInt(dailyInput, 10);
+                  if (!isNaN(n) && n >= 1) {
+                    setDailyNewCards(n, database);
+                  }
+                  setEditingDaily(false);
+                }}
+                onSubmitEditing={() => {
+                  const n = parseInt(dailyInput, 10);
+                  if (!isNaN(n) && n >= 1) {
+                    setDailyNewCards(n, database);
+                  }
+                  setEditingDaily(false);
+                }}
+              />
+            ) : (
+              <Pressable onPress={() => { setDailyInput(String(dailyNewCards)); setEditingDaily(true); }}>
+                <Text style={styles.stepperValue}>{dailyNewCards}</Text>
+              </Pressable>
+            )}
             <Pressable
               style={styles.stepperBtn}
-              onPress={() => setDailyNewCards(dailyNewCards + 5)}
+              onPress={() => setDailyNewCards(dailyNewCards + 5, database)}
             >
               <Text style={styles.stepperText}>+</Text>
             </Pressable>
           </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -202,7 +232,17 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: '600',
     color: colors.accent,
-    minWidth: 30,
+    minWidth: 40,
     textAlign: 'center',
+  },
+  stepperInput: {
+    fontSize: fontSize.lg,
+    fontWeight: '600',
+    color: colors.accent,
+    minWidth: 40,
+    textAlign: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.accent,
+    paddingVertical: 0,
   },
 });

@@ -51,6 +51,11 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
       deleted_at INTEGER
     );
 
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_vocab_date ON vocab(date_added);
     CREATE INDEX IF NOT EXISTS idx_card_due ON card_state(due);
     CREATE INDEX IF NOT EXISTS idx_review_vocab ON review_log(vocab_id);

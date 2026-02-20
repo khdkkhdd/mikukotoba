@@ -1,4 +1,9 @@
 import { create } from 'zustand';
+import type { SQLiteDatabase } from 'expo-sqlite';
+import { getAppSetting, setAppSetting } from '../db/queries';
+
+const DAILY_NEW_CARDS_KEY = 'dailyNewCards';
+const DEFAULT_DAILY_NEW_CARDS = 20;
 
 interface SettingsState {
   // 학습 설정
@@ -15,14 +20,15 @@ interface SettingsState {
   isSyncing: boolean;
 
   // Actions
-  setDailyNewCards: (n: number) => void;
+  setDailyNewCards: (n: number, db?: SQLiteDatabase) => void;
+  loadDailyNewCards: (db: SQLiteDatabase) => Promise<void>;
   setNotifications: (enabled: boolean, time?: string) => void;
   setGoogleAccount: (email: string | null) => void;
   setSyncState: (syncing: boolean, lastSync?: number) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  dailyNewCards: 20,
+  dailyNewCards: DEFAULT_DAILY_NEW_CARDS,
   notificationsEnabled: false,
   notificationTime: '09:00',
   googleEmail: null,
@@ -30,7 +36,21 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   lastSyncTime: 0,
   isSyncing: false,
 
-  setDailyNewCards: (n) => set({ dailyNewCards: n }),
+  setDailyNewCards: (n, db) => {
+    set({ dailyNewCards: n });
+    if (db) {
+      setAppSetting(db, DAILY_NEW_CARDS_KEY, String(n)).catch(() => {});
+    }
+  },
+  loadDailyNewCards: async (db) => {
+    const saved = await getAppSetting(db, DAILY_NEW_CARDS_KEY);
+    if (saved !== null) {
+      const n = parseInt(saved, 10);
+      if (!isNaN(n) && n >= 1) {
+        set({ dailyNewCards: n });
+      }
+    }
+  },
   setNotifications: (enabled, time) =>
     set((s) => ({
       notificationsEnabled: enabled,

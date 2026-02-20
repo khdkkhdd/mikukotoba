@@ -24,6 +24,7 @@ export default function RootLayout() {
       await init(db);
       const saved = await getSyncMeta(db, 'lastSyncTime');
       if (saved) useSettingsStore.getState().setSyncState(false, Number(saved));
+      await useSettingsStore.getState().loadDailyNewCards(db);
       initSyncManager(db);
     })();
 

@@ -70,8 +70,21 @@ export async function getEntryById(db: SQLiteDatabase, id: string): Promise<Voca
 export async function upsertEntry(db: SQLiteDatabase, entry: VocabEntry): Promise<void> {
   const params = entryToRow(entry);
   await db.runAsync(
-    `INSERT OR REPLACE INTO vocab (id, word, reading, romaji, meaning, pos, example_sentence, example_source, note, tags, date_added, timestamp, updated_at)
-     VALUES ($id, $word, $reading, $romaji, $meaning, $pos, $example_sentence, $example_source, $note, $tags, $date_added, $timestamp, $updated_at)`,
+    `INSERT INTO vocab (id, word, reading, romaji, meaning, pos, example_sentence, example_source, note, tags, date_added, timestamp, updated_at)
+     VALUES ($id, $word, $reading, $romaji, $meaning, $pos, $example_sentence, $example_source, $note, $tags, $date_added, $timestamp, $updated_at)
+     ON CONFLICT(id) DO UPDATE SET
+       word = excluded.word,
+       reading = excluded.reading,
+       romaji = excluded.romaji,
+       meaning = excluded.meaning,
+       pos = excluded.pos,
+       example_sentence = excluded.example_sentence,
+       example_source = excluded.example_source,
+       note = excluded.note,
+       tags = excluded.tags,
+       date_added = excluded.date_added,
+       timestamp = excluded.timestamp,
+       updated_at = excluded.updated_at`,
     params
   );
 }

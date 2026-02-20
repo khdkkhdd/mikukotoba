@@ -458,12 +458,16 @@ async function pushPartitionImmediate(date: string): Promise<number> {
   const metaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
   let remoteVersions: Record<string, number> = {};
   let remoteDeleted: Record<string, number> = {};
+  let remoteFsrsPartitionVersions: Record<string, number> | undefined;
+  let remoteReviewPartitionVersions: Record<string, number> | undefined;
 
   if (metaFileId) {
     try {
       const existing = await DriveAPI.getFile<DriveSyncMeta>(token, metaFileId);
       remoteVersions = existing.partitionVersions || {};
       remoteDeleted = existing.deletedEntries || {};
+      remoteFsrsPartitionVersions = existing.fsrsPartitionVersions;
+      remoteReviewPartitionVersions = existing.reviewPartitionVersions;
     } catch {
       // 리모트 읽기 실패
     }
@@ -478,6 +482,8 @@ async function pushPartitionImmediate(date: string): Promise<number> {
   const remoteSyncMeta: DriveSyncMeta = {
     partitionVersions: mergedVersions,
     deletedEntries: cleanTombstones({ ...remoteDeleted, ...meta.deletedEntries }),
+    fsrsPartitionVersions: remoteFsrsPartitionVersions,
+    reviewPartitionVersions: remoteReviewPartitionVersions,
   };
 
   // meta write + index write 병렬화 (~200ms 절약)

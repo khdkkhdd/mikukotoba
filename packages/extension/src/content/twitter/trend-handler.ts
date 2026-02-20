@@ -58,7 +58,7 @@ export class TrendHandler {
 
     try {
       const result = await translator.translate(text);
-      if (!topicSpan.isConnected) return;
+      if (!topicSpan.isConnected) { this.status?.translated(); return; }
 
       const hint = createInlineBracket(result, this.settings, {
         className: 'jp-twitter-inline-hint',

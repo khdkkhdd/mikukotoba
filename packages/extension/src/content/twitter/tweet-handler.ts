@@ -105,8 +105,8 @@ export class TweetHandler {
       log.info('Translation done:', { korean: result.korean?.slice(0, 30), engine: result.engine, fromCache: result.fromCache });
 
       // Verify element is still in DOM and text hasn't changed again
-      if (!element.isConnected) { log.debug('Element disconnected, skipping insert'); return; }
-      if (element.innerText?.trim() !== text) { log.debug('Text changed, skipping insert'); return; }
+      if (!element.isConnected) { log.debug('Element disconnected, skipping insert'); this.status?.translated(); return; }
+      if (element.innerText?.trim() !== text) { log.debug('Text changed, skipping insert'); this.status?.translated(); return; }
 
       this.insertInlineBlock(element, result, text);
       this.status?.translated();
@@ -153,8 +153,8 @@ export class TweetHandler {
 
     try {
       const result = await translator.translate(text);
-      if (!element.isConnected) return;
-      if (element.innerText?.trim() !== text) return;
+      if (!element.isConnected) { this.status?.translated(); return; }
+      if (element.innerText?.trim() !== text) { this.status?.translated(); return; }
 
       element.classList.remove('jp-furigana-hidden');
       const clone = createRubyClone(element, result.tokens, {
@@ -203,7 +203,7 @@ export class TweetHandler {
       const textToTranslate = textSpans.map(s => s.innerText?.trim()).filter(Boolean).join(' — ');
       const result = await translator.translate(textToTranslate);
 
-      if (!element.isConnected) return;
+      if (!element.isConnected) { this.status?.translated(); return; }
 
       this.insertCardTranslation(element, textSpans, result);
       this.status?.translated();

@@ -102,7 +102,7 @@ export class UserHandler {
 
     try {
       const result = await translator.translate(text);
-      if (!element.isConnected) return;
+      if (!element.isConnected) { this.status?.translated(); return; }
 
       this.insertBioTranslation(element, result, false, text);
       this.status?.translated();
@@ -230,8 +230,8 @@ export class UserHandler {
 
     try {
       const result = await translator.translate(text);
-      if (!element.isConnected) return;
-      if (element.innerText?.trim() !== text) return;
+      if (!element.isConnected) { this.status?.translated(); return; }
+      if (element.innerText?.trim() !== text) { this.status?.translated(); return; }
 
       element.classList.remove('jp-furigana-hidden');
       const clone = createRubyClone(element, result.tokens, {

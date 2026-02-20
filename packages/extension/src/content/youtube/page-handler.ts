@@ -281,8 +281,8 @@ export class YouTubePageHandler implements SiteHandler {
 
     try {
       const result = await translator.translate(text);
-      if (!el.isConnected) return;
-      if (el.innerText?.trim() !== text) return; // text changed during translation
+      if (!el.isConnected) { this.status?.translated(); return; }
+      if (el.innerText?.trim() !== text) { this.status?.translated(); return; } // text changed during translation
 
       // Split furigana into a separate styled block for main elements
       const shouldSplitFurigana = category === 'main' &&
@@ -691,13 +691,13 @@ export class YouTubePageHandler implements SiteHandler {
       // Translate paragraphs sequentially to respect rate limits
       const results: { text: string; result: TranslationResult }[] = [];
       for (const para of paragraphs) {
-        if (!el.isConnected) return;
+        if (!el.isConnected) { this.status?.translated(); return; }
         const result = await translator.translate(para);
         results.push({ text: para, result });
       }
 
-      if (!el.isConnected) return;
-      if (el.innerText?.trim() !== fullText) return; // text changed during translation
+      if (!el.isConnected) { this.status?.translated(); return; }
+      if (el.innerText?.trim() !== fullText) { this.status?.translated(); return; } // text changed during translation
 
       this.removeAdjacentTranslation(anchor);
 

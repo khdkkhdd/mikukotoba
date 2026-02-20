@@ -62,7 +62,7 @@ export default function AddScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
       <Field label="단어 *" value={form.word} onChange={(v) => setForm({ ...form, word: v })} placeholder="日本語" autoFocus />
       <Field label="읽기 (히라가나)" value={form.reading} onChange={(v) => setForm({ ...form, reading: v })} placeholder="にほんご" />
       <Field label="뜻 (한국어)" value={form.meaning} onChange={(v) => setForm({ ...form, meaning: v })} placeholder="일본어" />

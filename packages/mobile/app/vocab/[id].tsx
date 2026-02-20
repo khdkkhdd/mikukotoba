@@ -94,7 +94,7 @@ export default function VocabDetailScreen() {
 
   if (isEditing) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
         <Field label="단어" value={form.word} onChange={(v) => setForm({ ...form, word: v })} />
         <Field label="읽기" value={form.reading} onChange={(v) => setForm({ ...form, reading: v })} />
         <Field label="뜻" value={form.meaning} onChange={(v) => setForm({ ...form, meaning: v })} />

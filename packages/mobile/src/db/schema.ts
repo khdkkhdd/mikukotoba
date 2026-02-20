@@ -58,6 +58,7 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
 
   await migrateCardStateLearningSteps(db);
   await migrateVocabTags(db);
+  await migrateReviewLogIndex(db);
 }
 
 async function migrateVocabTags(db: SQLiteDatabase): Promise<void> {
@@ -65,6 +66,10 @@ async function migrateVocabTags(db: SQLiteDatabase): Promise<void> {
   if (!cols.some((c) => c.name === 'tags')) {
     await db.execAsync("ALTER TABLE vocab ADD COLUMN tags TEXT DEFAULT '[]'");
   }
+}
+
+async function migrateReviewLogIndex(db: SQLiteDatabase): Promise<void> {
+  await db.execAsync('CREATE INDEX IF NOT EXISTS idx_review_reviewed_at ON review_log(reviewed_at)');
 }
 
 async function migrateCardStateLearningSteps(db: SQLiteDatabase): Promise<void> {

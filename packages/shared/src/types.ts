@@ -48,6 +48,8 @@ export interface DrivePartitionContent {
 export interface DriveSyncMeta {
   partitionVersions: Record<string, number>;
   deletedEntries: Record<string, number>;
+  fsrsPartitionVersions?: Record<string, number>;
+  reviewPartitionVersions?: Record<string, number>;
 }
 
 // FSRS 카드 상태 동기화

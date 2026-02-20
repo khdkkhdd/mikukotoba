@@ -1,4 +1,5 @@
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { useSettingsStore } from '../stores/settings-store';
 
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 
@@ -36,4 +37,18 @@ export async function getAccessToken(): Promise<string | null> {
 
 export async function isSignedIn(): Promise<boolean> {
   return !!GoogleSignin.getCurrentUser();
+}
+
+export async function restoreAuthState(): Promise<void> {
+  try {
+    const hasPrevious = GoogleSignin.hasPreviousSignIn();
+    if (!hasPrevious) return;
+
+    const user = await GoogleSignin.signInSilently();
+    if (user?.data?.user?.email) {
+      useSettingsStore.getState().setGoogleAccount(user.data.user.email);
+    }
+  } catch {
+    // 복원 실패 — 무시 (사용자가 다시 로그인하면 됨)
+  }
 }

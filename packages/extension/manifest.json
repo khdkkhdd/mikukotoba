@@ -3,7 +3,7 @@
   "name": "ミク言葉",
   "version": "1.0.0",
   "description": "일본어 학습 보조 - 후리가나, 로마지, 한국어 번역을 동시에",
-  "permissions": ["storage", "activeTab", "contextMenus", "identity"],
+  "permissions": ["storage", "activeTab", "contextMenus", "identity", "scripting"],
   "host_permissions": [
     "*://*.youtube.com/*",
     "*://*.twitter.com/*",

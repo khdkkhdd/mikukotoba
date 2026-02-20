@@ -539,6 +539,42 @@ async function updateRecentTags(tags: string[]): Promise<void> {
   }
 }
 
+// ──────────────── Context Invalidation Recovery ────────────────
+
+async function pingAndReinject(tabId: number): Promise<void> {
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!tab.url?.startsWith('http') || tab.status !== 'complete') return;
+    await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+    // 연결 성공 = content script 살아있음
+  } catch {
+    // 연결 실패 = content script 죽었거나 없음 → 재주입
+    try {
+      const manifest = chrome.runtime.getManifest();
+      const cs = manifest.content_scripts?.[0]; // <all_urls> content script
+      if (cs?.js) {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: cs.js,
+        });
+      }
+    } catch {
+      // 주입 불가 탭 (chrome://, about: 등)
+    }
+  }
+}
+
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  pingAndReinject(tabId);
+});
+
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+  chrome.tabs.query({ active: true, windowId }).then(tabs => {
+    if (tabs[0]?.id) pingAndReinject(tabs[0].id);
+  });
+});
+
 // Context menu click handler
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== 'jp-add-to-vocab' || !info.selectionText || !tab?.id) return;

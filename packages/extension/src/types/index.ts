@@ -219,7 +219,8 @@ export type MessageType =
   | { type: 'SYNC_PULL' }
   | { type: 'SYNC_PUSH' }
   | { type: 'SYNC_GET_STATUS' }
-  | { type: 'SYNC_DIAGNOSE' };
+  | { type: 'SYNC_DIAGNOSE' }
+  | { type: 'PING' };
 
 // 기본 설정값
 export const DEFAULT_SETTINGS: UserSettings = {

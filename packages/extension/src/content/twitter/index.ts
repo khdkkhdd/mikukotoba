@@ -13,9 +13,14 @@ import { SELECTORS, PROCESSED_ATTR, TRANSLATION_ATTR, isEditableArea } from './u
 import { createLogger } from '@/core/logger';
 import twitterStyles from './twitter.css?inline';
 
-const twitterStyleEl = document.createElement('style');
+const TWITTER_STYLE_ID = 'mikukotoba-twitter-styles';
+let twitterStyleEl = document.getElementById(TWITTER_STYLE_ID) as HTMLStyleElement | null;
+if (!twitterStyleEl) {
+  twitterStyleEl = document.createElement('style');
+  twitterStyleEl.id = TWITTER_STYLE_ID;
+  (document.head || document.documentElement).appendChild(twitterStyleEl);
+}
 twitterStyleEl.textContent = twitterStyles;
-(document.head || document.documentElement).appendChild(twitterStyleEl);
 
 const log = createLogger('Twitter');
 

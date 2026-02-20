@@ -8,9 +8,14 @@ setLogEnabled(false);
 import overlayStyles from './shared/overlay-styles.css?inline';
 
 // Inject CSS inline to avoid CRXJS CSS preload failures in content scripts
-const overlayStyleEl = document.createElement('style');
+const OVERLAY_STYLE_ID = 'mikukotoba-overlay-styles';
+let overlayStyleEl = document.getElementById(OVERLAY_STYLE_ID) as HTMLStyleElement | null;
+if (!overlayStyleEl) {
+  overlayStyleEl = document.createElement('style');
+  overlayStyleEl.id = OVERLAY_STYLE_ID;
+  (document.head || document.documentElement).appendChild(overlayStyleEl);
+}
 overlayStyleEl.textContent = overlayStyles;
-(document.head || document.documentElement).appendChild(overlayStyleEl);
 
 const log = createLogger('Content');
 
@@ -78,6 +83,16 @@ async function loadSettingsFromStorage(): Promise<UserSettings> {
     openaiApiKey: apiKeys.openaiApiKey || '',
     geminiApiKey: apiKeys.geminiApiKey || '',
   };
+}
+
+function cleanupPreviousInstance(): void {
+  // 이전 인스턴스의 UI 오버레이 제거
+  document.querySelector('mikukotoba-status')?.remove();
+  document.getElementById('jp-twitter-hover-popup')?.remove();
+  document.getElementById('jp-yt-hover-popup')?.remove();
+  document.getElementById('mikukotoba-hover-popup')?.remove();
+  document.getElementById('jp-vocab-modal-host')?.remove();
+  document.getElementById('mikukotoba-overlay-container')?.remove();
 }
 
 async function init(): Promise<void> {
@@ -232,7 +247,12 @@ function cleanupAll(): void {
 
 // ──────────────── Message Handling ────────────────
 
-chrome.runtime.onMessage.addListener((message: MessageType) => {
+chrome.runtime.onMessage.addListener((message: MessageType, _sender, sendResponse) => {
+  if (message.type === 'PING') {
+    sendResponse({ alive: true });
+    return;
+  }
+
   switch (message.type) {
     case 'SETTINGS_CHANGED':
       // Re-read full settings from storage to ensure API keys are included
@@ -387,4 +407,5 @@ captureSelectionOnContextMenu();
 
 // ──────────────── Start ────────────────
 
+cleanupPreviousInstance();
 init().catch((e) => log.error('Init error:', e));

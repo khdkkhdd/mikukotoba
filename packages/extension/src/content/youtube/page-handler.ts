@@ -24,9 +24,14 @@ import {
 import { createLogger } from '@/core/logger';
 import ytPageStyles from './youtube-page.css?inline';
 
-const ytPageStyleEl = document.createElement('style');
+const YT_PAGE_STYLE_ID = 'mikukotoba-yt-page-styles';
+let ytPageStyleEl = document.getElementById(YT_PAGE_STYLE_ID) as HTMLStyleElement | null;
+if (!ytPageStyleEl) {
+  ytPageStyleEl = document.createElement('style');
+  ytPageStyleEl.id = YT_PAGE_STYLE_ID;
+  (document.head || document.documentElement).appendChild(ytPageStyleEl);
+}
 ytPageStyleEl.textContent = ytPageStyles;
-(document.head || document.documentElement).appendChild(ytPageStyleEl);
 
 const log = createLogger('YouTube:Page');
 

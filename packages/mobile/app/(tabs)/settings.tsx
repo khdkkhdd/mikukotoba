@@ -3,6 +3,7 @@ import { useDatabase } from '../../src/components/DatabaseContext';
 import { useSettingsStore } from '../../src/stores/settings-store';
 import { fullSync } from '../../src/services/sync-manager';
 import { signIn, signOut, isSignedIn } from '../../src/services/drive-auth';
+import { setSyncMeta } from '../../src/db/queries';
 import { useVocabStore } from '../../src/stores/vocab-store';
 import { colors, spacing, fontSize } from '../../src/components/theme';
 
@@ -38,7 +39,9 @@ export default function SettingsScreen() {
     setSyncState(true);
     try {
       const result = await fullSync(database);
-      setSyncState(false, Date.now());
+      const now = Date.now();
+      setSyncState(false, now);
+      await setSyncMeta(database, 'lastSyncTime', String(now));
       await refreshVocab(database);
 
       const parts: string[] = [];

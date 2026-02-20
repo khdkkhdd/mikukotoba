@@ -6,6 +6,8 @@ import { useVocabStore } from '../src/stores/vocab-store';
 import { DatabaseContext } from '../src/components/DatabaseContext';
 import { initSyncManager, destroySyncManager } from '../src/services/sync-manager';
 import { configureDriveAuth, restoreAuthState } from '../src/services/drive-auth';
+import { getSyncMeta } from '../src/db/queries';
+import { useSettingsStore } from '../src/stores/settings-store';
 
 export default function RootLayout() {
   const [database, setDatabase] = useState<SQLiteDatabase | null>(null);
@@ -20,6 +22,8 @@ export default function RootLayout() {
       await initDatabase(db);
       setDatabase(db);
       await init(db);
+      const saved = await getSyncMeta(db, 'lastSyncTime');
+      if (saved) useSettingsStore.getState().setSyncState(false, Number(saved));
       initSyncManager(db);
     })();
 

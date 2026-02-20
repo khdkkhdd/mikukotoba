@@ -364,8 +364,6 @@ async function handleMessage(
 
     case 'VOCAB_SAVE': {
       await VocabStorage.addEntry(message.payload);
-      // Auto-add to glossary: vocab → glossary sync
-      await addVocabToGlossary(message.payload.word, message.payload.meaning);
       // Update recent tags
       const saveTags = message.payload.tags ?? [];
       if (saveTags.length > 0) {
@@ -535,22 +533,6 @@ async function updateRecentTags(tags: string[]): Promise<void> {
     await chrome.storage.local.set({ [RECENT_TAGS_KEY]: updated });
   } catch {
     // Best effort
-  }
-}
-
-const GLOSSARY_STORAGE_KEY = 'jp_glossary_custom';
-
-async function addVocabToGlossary(japanese: string, korean: string): Promise<void> {
-  if (!japanese || !korean) return;
-  try {
-    const data = await chrome.storage.local.get(GLOSSARY_STORAGE_KEY);
-    const entries: Array<{ japanese: string; korean: string; note?: string }> = data[GLOSSARY_STORAGE_KEY] || [];
-    // Skip if already exists
-    if (entries.some(e => e.japanese === japanese)) return;
-    entries.push({ japanese, korean, note: '단어장에서 자동 추가' });
-    await chrome.storage.local.set({ [GLOSSARY_STORAGE_KEY]: entries });
-  } catch {
-    // Best effort — don't fail vocab save
   }
 }
 

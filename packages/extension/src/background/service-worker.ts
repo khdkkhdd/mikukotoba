@@ -364,6 +364,7 @@ async function handleMessage(
 
     case 'VOCAB_SAVE': {
       await VocabStorage.addEntry(message.payload);
+      await DriveSync.markDirty(message.payload.dateAdded);
       // Update recent tags
       const saveTags = message.payload.tags ?? [];
       if (saveTags.length > 0) {
@@ -389,6 +390,7 @@ async function handleMessage(
 
     case 'VOCAB_UPDATE': {
       await VocabStorage.updateEntry(message.payload);
+      await DriveSync.markDirty(message.payload.dateAdded);
       sendResponse({ success: true });
       DriveSync.pushPartition(message.payload.dateAdded).catch(() => {});
       break;
@@ -396,6 +398,7 @@ async function handleMessage(
 
     case 'VOCAB_DELETE': {
       await VocabStorage.deleteEntry(message.payload.id, message.payload.date);
+      await DriveSync.markDirty(message.payload.date);
       sendResponse({ success: true });
       DriveSync.pushPartitionWithDeletion(message.payload.id, message.payload.date).catch(() => {});
       break;

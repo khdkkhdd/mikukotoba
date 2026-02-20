@@ -52,7 +52,7 @@ export const DriveAuth = {
     authUrl.searchParams.set('redirect_uri', redirectUrl);
     authUrl.searchParams.set('response_type', 'token');
     authUrl.searchParams.set('scope', SCOPES);
-    authUrl.searchParams.set('prompt', 'consent');
+    authUrl.searchParams.set('prompt', 'select_account');
 
     const responseUrl = await chrome.identity.launchWebAuthFlow({
       url: authUrl.toString(),

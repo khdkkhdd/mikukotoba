@@ -107,6 +107,12 @@ async function ensureDriveFileId(
 export const DriveSync = {
   getMetadata: getLocalMeta,
 
+  async markDirty(date: string): Promise<void> {
+    const meta = await getLocalMeta();
+    meta.partitionVersions[date] = Date.now();
+    await saveLocalMeta(meta);
+  },
+
   async pushAll(): Promise<number> {
     const token = await DriveAuth.getValidToken();
     if (!token) return 0;

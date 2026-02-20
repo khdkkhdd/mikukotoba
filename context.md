@@ -1,60 +1,48 @@
 # Goal
 
-모바일 앱의 자동 동기화 및 학습 UX 개선.
+확장프로그램 Google Drive 동기화 문제 디버깅 및 수정.
 
-1. Cold start 시 자동 pull 추가
-2. 자동 sync 후 마지막 동기화 시간 반영
-3. 학습 대기 화면에서 실시간 카운트다운 + 자동 재개
+1. ~~OAuth silent refresh 실패로 매번 재로그인 필요한 문제~~ (완료)
+2. 단어 추가 후 Drive에 push가 안 되는 문제
 
 # Research
 
-## 모바일 동기화 구조
+## 근본 원인 (확인됨)
 
-- `SyncManager` (`services/sync-manager.ts`): 모듈 레벨 상태로 dirty 추적, flush/pull 관리
-- `initSyncManager(db)`: `_layout.tsx`에서 앱 시작 시 호출. `AppState` 리스너 등록
-- `handleAppStateChange`: background→flush, foreground→3종 pull (vocab/FSRS/review)
-- `fullSync`: 수동 동기화 (설정 탭 버튼). flush→pull→push→`commitSyncMeta`
-- `lastSyncTime`: `useSettingsStore`(UI) + `setSyncMeta`(DB 영속화) 이중 저장
+- 단어 저장 시 `pushPartition`이 500ms `setTimeout` 디바운스 사용
+- Service Worker가 디바운스 대기 중 종료되면 push 미실행
+- `pushAll`은 `localVersion > remoteVersion`일 때만 push하는데, 로컬 버전은 push 성공 시에만 갱신됨
+- 결과: push 미실행 → 로컬/리모트 버전 동일 → `pushAll`도 건너뜀 → 데이터 영구 누락
 
-## Cold start 시 pull 부재
+## 진단 결과
 
-- `initSyncManager`은 `AppState` 리스너만 등록, 초기 pull 없음
-- Cold start는 이미 `active` 상태로 시작 → state change 이벤트 미발생 → pull 안 됨
+- `SYNC_DIAGNOSE`: 로컬 22개, Drive 19개 (3개 누락)
+- 양쪽 `partitionVersions` 동일 → `pushAll`이 "변경 없음"으로 판단
+- 수동 `SYNC_PUSH` 실행해도 `pushed: 0` 반환
 
-## lastSyncTime 업데이트 범위
+## 동기화 흐름 (확장프로그램)
 
-- 기존: `fullSync` (수동) 에서만 업데이트
-- `handleAppStateChange` (포그라운드 복귀) 에서는 미업데이트
-- `settings.tsx:43-44`에서 수동 동기화 시 store + DB 모두 업데이트하는 패턴 확인
-
-## 학습 대기 화면 (SrsSession.tsx)
-
-- `selectNextCard` → 'waiting' view: 모든 큐 비었고 waitingQueue만 남을 때
-- 기존: `const now = Date.now()` (렌더 스냅샷, 매초 갱신 안 됨)
-- 기존 TICK: `setTimeout`으로 정확히 due 시점에 1회 발화 → 카드 승격은 됐지만 카운트다운 시각 변화 없음
-- `selectNextCard` 내부에서 `promoteWaiting(state, now)` 호출 — 순수 함수, session state 미변경
-- `applyGrade`는 `learningQueue`/`reviewQueue`/`newQueue`에서만 카드 검색 → waitingQueue에 있으면 채점 무시
+- 단어 저장: `VOCAB_SAVE` → `VocabStorage.addEntry` → `DriveSync.pushPartition(dateAdded)` (fire-and-forget)
+- `pushPartition`: 500ms 디바운스 → `pushPartitionImmediate`
+- `pushPartitionImmediate`: `getValidToken()` → Drive appData에 파티션 파일 업로드
+- `pushAll`: `localVersion > remoteVersion` 필터 → 해당 날짜만 push
 
 # Plan
 
 ## Decisions
 
-- Cold start pull: `initSyncManager` 내에서 fire-and-forget async로 기존 foreground pull과 동일 패턴
-- lastSyncTime: 자동 pull 성공 시에도 store + DB 업데이트. `commitSyncMeta`는 경량 pull 설계상 생략 (기존 foreground pull과 동일)
-- 카운트다운: `useState(Date.now())` + `setInterval(1000)` — waiting 큐 있을 때만 활성화
-- TICK dispatch: `setInterval` 콜백에서 `setNow` + `dispatch TICK` 동시 호출 (React 18 배치로 1회 렌더)
-- AppState 복귀: `setNow` + `dispatch TICK` 모두 필요 — TICK 없으면 session state와 뷰 불일치로 채점 실패
+- OAuth prompt: `consent` → `select_account` 변경 완료
+- `DriveSync.markDirty(date)` 추가: 단어 저장 시 즉시 로컬 버전 bump → SW 종료되어도 다음 pushAll에서 복구 가능
 
 ## Steps
 
-완료.
+- [ ] 기존 누락분 수동 복구: 콘솔에서 로컬 버전 bump 후 SYNC_PUSH 실행
+- [ ] 401 에러 핸들링 추가 (잠재적 버그, 미착수)
 
 # Progress
 
-- [x] `initSyncManager`에 cold start pull 추가 (`sync-manager.ts:160-183`)
-- [x] `handleAppStateChange` + cold start pull에 `lastSyncTime` 업데이트 추가
-- [x] `SrsSession.tsx` 카운트다운: `setTimeout` → `setInterval(1000)` + `useState(now)` 전환
-- [x] AppState 복귀 시 TICK dispatch 누락 버그 수정
-- [x] 미사용 import (`getNextWaitingTime`, `timerRef`) 정리
-- [x] tsc --noEmit 통과
-- [ ] 커밋
+- [x] OAuth prompt 변경 (`drive-auth.ts`)
+- [x] 근본 원인 파악: SW 종료 시 디바운스 push 미실행 + pushAll 버전 비교 로직
+- [x] `DriveSync.markDirty()` 추가, VOCAB_SAVE/UPDATE/DELETE 핸들러에서 호출
+- [x] 빌드 통과
+- [ ] 기존 누락분 수동 복구 대기 중 (사용자가 콘솔 스크립트 실행 필요)

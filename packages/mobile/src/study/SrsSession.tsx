@@ -8,9 +8,9 @@ import { computeReview, getSchedulingPreview, Rating, saveCardState } from '../f
 import {
   getDueCardsWithEntries,
   getNewCardsWithEntries,
-  getTodayNewCardCount,
   getDueCardsWithEntriesByTag,
   getNewCardsWithEntriesByTag,
+  getTodayNewCardCount,
 } from '../db/queries';
 import { markFsrsDirty, markReviewLogDirty } from '../services/sync-manager';
 import { StudyCard } from './StudyCard';
@@ -204,8 +204,8 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
       // 비동기 DB 저장 — 성공 시에만 dirty 마킹
       try {
         await saveCardState(database, item.vocabId, nextCard, now, grade);
-        markFsrsDirty();
-        markReviewLogDirty();
+        markFsrsDirty(item.vocabId);
+        markReviewLogDirty(now.toISOString().slice(0, 7));
       } catch (e) {
         console.error('[SRS] Failed to save card state:', e);
       }

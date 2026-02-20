@@ -218,7 +218,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   tagRow: {
-    maxHeight: 40,
+    flexGrow: 0,
+    flexShrink: 0,
     marginBottom: spacing.sm,
   },
   tagRowContent: {
@@ -227,10 +228,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tagChip: {
+    height: 30,
     paddingHorizontal: 12,
-    paddingVertical: 6,
     borderRadius: 16,
     backgroundColor: colors.borderLight,
+    justifyContent: 'center',
   },
   tagChipActive: {
     backgroundColor: colors.accent,

@@ -106,6 +106,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 4px 0;
   cursor: pointer;
 }
 
@@ -162,6 +163,39 @@ body {
   accent-color: #39C5BB;
 }
 
+/* Segment Control */
+.segment-control {
+  display: flex;
+  background: #DEE6EA;
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.segment-btn {
+  flex: 1;
+  padding: 5px 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #5A6570;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 200ms;
+}
+
+.segment-btn:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.segment-btn.active {
+  background: #39C5BB;
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(57, 197, 187, 0.3);
+}
+
 /* Checkbox */
 .checkbox-row {
   display: flex;
@@ -172,7 +206,31 @@ body {
 }
 
 .checkbox-row input[type="checkbox"] {
-  accent-color: #39C5BB;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #B4BFC8;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 150ms;
+  flex-shrink: 0;
+  display: grid;
+  place-content: center;
+}
+
+.checkbox-row input[type="checkbox"]:checked {
+  background: #39C5BB;
+  border-color: #39C5BB;
+}
+
+.checkbox-row input[type="checkbox"]:checked::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  border: solid #FFFFFF;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 2px;
 }
 
 /* Select */

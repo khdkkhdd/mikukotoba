@@ -23,7 +23,9 @@ export default function VocabDetailScreen() {
     pos: '',
     exampleSentence: '',
     note: '',
+    tags: [] as string[],
   });
+  const [newTag, setNewTag] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -37,6 +39,7 @@ export default function VocabDetailScreen() {
           pos: data.pos,
           exampleSentence: data.exampleSentence,
           note: data.note,
+          tags: data.tags ?? [],
         });
       }
     })();
@@ -77,6 +80,18 @@ export default function VocabDetailScreen() {
     ]);
   };
 
+  const addTag = () => {
+    const tag = newTag.trim();
+    if (tag && !form.tags.includes(tag)) {
+      setForm({ ...form, tags: [...form.tags, tag] });
+    }
+    setNewTag('');
+  };
+
+  const removeTag = (tag: string) => {
+    setForm({ ...form, tags: form.tags.filter((t) => t !== tag) });
+  };
+
   if (isEditing) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -86,6 +101,33 @@ export default function VocabDetailScreen() {
         <Field label="품사" value={form.pos} onChange={(v) => setForm({ ...form, pos: v })} />
         <Field label="예문" value={form.exampleSentence} onChange={(v) => setForm({ ...form, exampleSentence: v })} multiline />
         <Field label="메모" value={form.note} onChange={(v) => setForm({ ...form, note: v })} multiline />
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>태그</Text>
+          {form.tags.length > 0 && (
+            <View style={styles.tagChips}>
+              {form.tags.map((t) => (
+                <Pressable key={t} style={styles.tagChip} onPress={() => removeTag(t)}>
+                  <Text style={styles.tagChipText}>{t} ✕</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <View style={styles.tagInputRow}>
+            <TextInput
+              style={styles.tagInput}
+              value={newTag}
+              onChangeText={setNewTag}
+              placeholder="태그 추가..."
+              placeholderTextColor={colors.textPlaceholder}
+              onSubmitEditing={addTag}
+              returnKeyType="done"
+            />
+            <Pressable style={styles.tagAddBtn} onPress={addTag}>
+              <Text style={styles.tagAddBtnText}>+</Text>
+            </Pressable>
+          </View>
+        </View>
 
         <View style={styles.editActions}>
           <Pressable style={styles.saveBtn} onPress={handleSave}>
@@ -105,6 +147,15 @@ export default function VocabDetailScreen() {
       {entry.reading ? <Text style={styles.reading}>{entry.reading}</Text> : null}
       <Text style={styles.meaning}>{entry.meaning}</Text>
       {entry.pos ? <Text style={styles.pos}>{entry.pos}</Text> : null}
+      {(entry.tags ?? []).length > 0 && (
+        <View style={styles.viewTags}>
+          {entry.tags.map((t) => (
+            <View key={t} style={styles.viewTag}>
+              <Text style={styles.viewTagText}>{t}</Text>
+            </View>
+          ))}
+        </View>
+      )}
       {entry.exampleSentence ? (
         <View style={styles.exampleBlock}>
           <Text style={styles.exampleLabel}>예문</Text>
@@ -223,6 +274,67 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   fieldMultiline: { minHeight: 80, textAlignVertical: 'top' },
+  viewTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: spacing.sm,
+  },
+  viewTag: {
+    backgroundColor: colors.accentLight,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  viewTagText: {
+    fontSize: fontSize.sm,
+    color: colors.accent,
+    fontWeight: '500',
+  },
+  tagChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  tagChip: {
+    backgroundColor: colors.accentLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  tagChipText: {
+    fontSize: fontSize.sm,
+    color: colors.accent,
+    fontWeight: '500',
+  },
+  tagInputRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  tagInput: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.md,
+    color: colors.text,
+  },
+  tagAddBtn: {
+    backgroundColor: colors.accent,
+    borderRadius: 8,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagAddBtnText: {
+    fontSize: fontSize.lg,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
   editActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.lg },
   saveBtn: {
     flex: 1,

@@ -9,6 +9,7 @@ export interface VocabEntry {
   exampleSentence: string; // 주변 문장
   exampleSource: string;   // 출처 URL
   note: string;            // 사용자 메모
+  tags: string[];          // 사용자 지정 태그
   dateAdded: string;       // YYYY-MM-DD
   timestamp: number;       // unix ms
 }

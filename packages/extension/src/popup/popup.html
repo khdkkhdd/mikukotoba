@@ -31,31 +31,38 @@
 
     <div class="divider"></div>
 
-    <!-- Site Settings Group -->
+    <!-- Handler Toggles -->
     <div class="section">
       <div class="section-title">사이트별 설정</div>
 
       <label class="toggle-row">
-        <span>YouTube 자막 번역</span>
-        <input type="checkbox" id="youtubeToggle" class="toggle">
+        <span>Twitter/X</span>
+        <input type="checkbox" id="handlerTwitter" class="toggle">
       </label>
-      <div class="hint">YouTube 영상 페이지에서 자동 활성화</div>
+
+      <label class="toggle-row">
+        <span>YouTube 자막 번역</span>
+        <input type="checkbox" id="handlerYoutubeSubtitle" class="toggle">
+      </label>
+
+      <label class="toggle-row">
+        <span>YouTube 페이지 번역</span>
+        <input type="checkbox" id="handlerYoutubePage" class="toggle">
+      </label>
+
+      <label class="toggle-row">
+        <span>일반 웹페이지</span>
+        <input type="checkbox" id="handlerWebpage" class="toggle">
+      </label>
 
       <div class="sub-divider"></div>
 
       <div class="sub-section-title">웹페이지 모드</div>
-      <label class="radio-row">
-        <input type="radio" name="mode" value="hover"> 호버 번역
-      </label>
-      <label class="radio-row">
-        <input type="radio" name="mode" value="inline"> 인라인 번역
-      </label>
-      <label class="radio-row">
-        <input type="radio" name="mode" value="furigana-only"> 전체 후리가나
-      </label>
-      <label class="radio-row">
-        <input type="radio" name="mode" value="off"> OFF
-      </label>
+      <div class="segment-control" id="webpageModeSegment">
+        <button type="button" class="segment-btn" data-mode="hover">호버</button>
+        <button type="button" class="segment-btn" data-mode="inline">인라인</button>
+        <button type="button" class="segment-btn" data-mode="furigana-only">후리가나</button>
+      </div>
     </div>
 
     <div class="divider"></div>

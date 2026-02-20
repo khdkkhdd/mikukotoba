@@ -55,7 +55,7 @@ export class WebpageSiteHandler implements SiteHandler {
   }
 
   isEnabled(settings: UserSettings): boolean {
-    return settings.webpageMode !== 'off';
+    return (settings.handlerEnabled?.webpage ?? true) && settings.webpageMode !== 'off';
   }
 
   setStatusIndicator(indicator: StatusIndicator): void {

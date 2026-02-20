@@ -1,7 +1,8 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useDatabase } from '../../src/components/DatabaseContext';
 import { getDueCount, getNewCount } from '../../src/fsrs';
+import { getDueCountByTag } from '../../src/db';
 import { SrsSession } from '../../src/study/SrsSession';
 import { RelaySession } from '../../src/study/RelaySession';
 import { colors, spacing, fontSize } from '../../src/components/theme';
@@ -10,37 +11,50 @@ type StudyMode = 'select' | 'srs' | 'relay';
 
 export default function StudyScreen() {
   const [mode, setMode] = useState<StudyMode>('select');
+  const [filterTag, setFilterTag] = useState<string | undefined>();
 
-  if (mode === 'srs') return <SrsSession onExit={() => setMode('select')} onStartRelay={() => setMode('relay')} />;
+  const startSrs = (tag?: string) => {
+    setFilterTag(tag);
+    setMode('srs');
+  };
+
+  if (mode === 'srs') return <SrsSession filterTag={filterTag} onExit={() => setMode('select')} onStartRelay={() => setMode('relay')} />;
   if (mode === 'relay') return <RelaySession onExit={() => setMode('select')} />;
 
-  return <ModeSelector onSrs={() => setMode('srs')} onRelay={() => setMode('relay')} />;
+  return <ModeSelector onSrs={startSrs} onRelay={() => setMode('relay')} />;
 }
 
-function ModeSelector({ onSrs, onRelay }: { onSrs: () => void; onRelay: () => void }) {
+function ModeSelector({ onSrs, onRelay }: { onSrs: (tag?: string) => void; onRelay: () => void }) {
   const database = useDatabase();
   const [dueCount, setDueCount] = useState(0);
   const [newCount, setNewCount] = useState(0);
+  const [tagDueCounts, setTagDueCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     async function load() {
-      const [due, newC] = await Promise.all([
+      const [due, newC, tagDue] = await Promise.all([
         getDueCount(database),
         getNewCount(database),
+        getDueCountByTag(database),
       ]);
       setDueCount(due);
       setNewCount(newC);
+      setTagDueCounts(tagDue);
     }
     load();
   }, [database]);
 
+  const tagEntries = Object.entries(tagDueCounts)
+    .filter(([, count]) => count > 0)
+    .sort(([, a], [, b]) => b - a);
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <Text style={styles.title}>학습</Text>
 
       <Pressable
         style={({ pressed }) => [styles.modeCard, pressed && styles.modeCardPressed]}
-        onPress={onSrs}
+        onPress={() => onSrs()}
       >
         <Text style={styles.modeIcon}>📚</Text>
         <View style={styles.modeContent}>
@@ -63,7 +77,25 @@ function ModeSelector({ onSrs, onRelay }: { onSrs: () => void; onRelay: () => vo
         </View>
         <Text style={styles.modeArrow}>→</Text>
       </Pressable>
-    </View>
+
+      {tagEntries.length > 0 && (
+        <>
+          <Text style={styles.sectionLabel}>태그별 학습</Text>
+          {tagEntries.map(([tag, count]) => (
+            <Pressable
+              key={tag}
+              style={({ pressed }) => [styles.tagCard, pressed && styles.modeCardPressed]}
+              onPress={() => onSrs(tag)}
+            >
+              <View style={styles.tagDot} />
+              <Text style={styles.tagCardName}>{tag || '태그 없음'}</Text>
+              <Text style={styles.tagCardCount}>복습 {count}개</Text>
+              <Text style={styles.modeArrow}>→</Text>
+            </Pressable>
+          ))}
+        </>
+      )}
+    </ScrollView>
   );
 }
 
@@ -71,8 +103,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  scrollContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: 80,
+    paddingBottom: 100,
   },
   title: {
     fontSize: fontSize.xxl,
@@ -117,5 +152,40 @@ const styles = StyleSheet.create({
   modeArrow: {
     fontSize: fontSize.lg,
     color: colors.textPlaceholder,
+  },
+  sectionLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    color: colors.textMuted,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  tagCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  tagDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+    marginRight: spacing.sm,
+  },
+  tagCardName: {
+    flex: 1,
+    fontSize: fontSize.md,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  tagCardCount: {
+    fontSize: fontSize.sm,
+    color: colors.textMuted,
+    marginRight: spacing.sm,
   },
 });

@@ -669,6 +669,11 @@ function esc(text: string): string {
 // ──────────────── Init ────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Platform detection for keyboard shortcut display
+  if (navigator.platform.includes('Mac') || navigator.userAgent.includes('Mac')) {
+    document.body.classList.add('is-mac');
+  }
+
   loadSettings();
   setupEventListeners();
 });

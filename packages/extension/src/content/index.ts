@@ -5,7 +5,12 @@ import { createLogger, setLogEnabled } from '@/core/logger';
 import { setApiFetchImpl } from '@/core/translator/api-fetch';
 
 setLogEnabled(false);
-import './shared/overlay-styles.css';
+import overlayStyles from './shared/overlay-styles.css?inline';
+
+// Inject CSS inline to avoid CRXJS CSS preload failures in content scripts
+const overlayStyleEl = document.createElement('style');
+overlayStyleEl.textContent = overlayStyles;
+(document.head || document.documentElement).appendChild(overlayStyleEl);
 
 const log = createLogger('Content');
 
@@ -234,9 +239,18 @@ chrome.runtime.onMessage.addListener((message: MessageType) => {
       loadSettingsFromStorage()
         .catch(() => ({ ...settings, ...message.payload }))
         .then((loaded) => {
+          const prevEnabled = settings.handlerEnabled;
           settings = loaded;
           applyCSSVariables(settings);
           translator.configure(settings);
+
+          // 핸들러 활성 상태 변경 시 전체 재시작
+          if (JSON.stringify(prevEnabled) !== JSON.stringify(settings.handlerEnabled)) {
+            cleanupAll();
+            init();
+            return;
+          }
+
           for (const h of activeHandlers) {
             h.updateSettings(settings);
           }
@@ -312,6 +326,21 @@ async function handleVocabAdd(text: string): Promise<void> {
   }
 }
 
+// ──────────────── Context Invalidation Guard ────────────────
+
+let contextInvalidated = false;
+
+function checkContext(): void {
+  if (!chrome.runtime?.id) {
+    if (!contextInvalidated) {
+      contextInvalidated = true;
+      cleanupAll();
+      log.warn('Extension context invalidated — reload page to reconnect');
+    }
+    throw new Error('Extension context invalidated');
+  }
+}
+
 // ──────────────── Background Fetch Proxy ────────────────
 
 /**
@@ -320,6 +349,8 @@ async function handleVocabAdd(text: string): Promise<void> {
  * external APIs (Papago, Claude, OpenAI, Gemini) gets blocked.
  */
 async function bgFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  checkContext();
+
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const method = init?.method ?? 'GET';
   const headers: Record<string, string> = {};

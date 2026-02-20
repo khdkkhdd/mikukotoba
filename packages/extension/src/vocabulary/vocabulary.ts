@@ -4,11 +4,16 @@ const INITIAL_LOAD_DAYS = 7;
 const LOAD_MORE_DAYS = 7;
 
 type QuizMode = 'normal' | 'hide-meaning' | 'hide-word';
+type ViewMode = 'date' | 'tag';
 
 let allDates: string[] = [];
 let loadedDateCount = 0;
 let searchQuery = '';
 let quizMode: QuizMode = 'normal';
+let viewMode: ViewMode = 'date';
+let activeTagFilter: string | null = null;
+let allTags: string[] = [];
+let tagCounts: Record<string, number> = {};
 
 // ──────────────── Message helpers ────────────────
 
@@ -33,6 +38,19 @@ async function searchEntries(query: string): Promise<VocabEntry[]> {
   const resp = await sendMessage<{ payload: VocabEntry[] }>({
     type: 'VOCAB_SEARCH',
     payload: { query },
+  });
+  return resp.payload;
+}
+
+async function getTags(): Promise<string[]> {
+  const resp = await sendMessage<{ payload: string[] }>({ type: 'VOCAB_GET_TAGS' });
+  return resp.payload;
+}
+
+async function getEntriesByTag(tag: string): Promise<VocabEntry[]> {
+  const resp = await sendMessage<{ payload: VocabEntry[] }>({
+    type: 'VOCAB_GET_BY_TAG',
+    payload: { tag },
   });
   return resp.payload;
 }
@@ -100,6 +118,10 @@ function renderEntry(entry: VocabEntry, query: string): HTMLElement {
   // Hide example sentence in quiz modes (hint prevention)
   const showExample = !isQuiz && entry.exampleSentence;
   const showNote = !hideMeaning && entry.note;
+  const tags = entry.tags ?? [];
+  const tagsHtml = !isQuiz && tags.length > 0
+    ? `<div class="entry-tags">${tags.map(t => `<span class="entry-tag">${escapeHtml(t)}</span>`).join('')}</div>`
+    : '';
 
   card.innerHTML = `
     <div class="entry-top">
@@ -110,6 +132,7 @@ function renderEntry(entry: VocabEntry, query: string): HTMLElement {
     <div class="entry-meaning">${meaningHtml}</div>
     ${showExample ? `<div class="entry-example">${hl(entry.exampleSentence!)}</div>` : ''}
     ${showNote ? `<div class="entry-note">${hl(entry.note!)}</div>` : ''}
+    ${tagsHtml}
     ${sourceHtml}
     ${!isQuiz ? `<div class="entry-actions">
       <button class="edit-btn">편집</button>
@@ -182,6 +205,13 @@ function startInlineEdit(entry: VocabEntry, card: HTMLElement): void {
     editForm.appendChild(input);
   }
 
+  // Tags field (comma-separated)
+  const tagsInput = document.createElement('input');
+  tagsInput.className = 'entry-edit-input';
+  tagsInput.placeholder = '태그 (쉼표 구분)';
+  tagsInput.value = (entry.tags ?? []).join(', ');
+  editForm.appendChild(tagsInput);
+
   const btnRow = document.createElement('div');
   btnRow.className = 'entry-actions';
   btnRow.innerHTML = `
@@ -204,6 +234,10 @@ function startInlineEdit(entry: VocabEntry, card: HTMLElement): void {
   });
 
   btnRow.querySelector('.save-edit-btn')!.addEventListener('click', async () => {
+    const tags = tagsInput.value
+      .split(',')
+      .map(t => t.trim())
+      .filter(Boolean);
     const updated: VocabEntry = {
       ...entry,
       word: inputs.word.value.trim(),
@@ -212,6 +246,8 @@ function startInlineEdit(entry: VocabEntry, card: HTMLElement): void {
       pos: inputs.pos.value.trim(),
       exampleSentence: inputs.exampleSentence.value.trim(),
       note: inputs.note.value.trim(),
+      tags,
+      timestamp: Date.now(),
     };
     await updateEntry(updated);
     card.classList.remove('editing');
@@ -257,6 +293,174 @@ function showConfirmDelete(entry: VocabEntry, card: HTMLElement): void {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) overlay.remove();
   });
+}
+
+// ──────────────── Tag view ────────────────
+
+async function loadTagData(): Promise<void> {
+  allTags = await getTags();
+  tagCounts = {};
+  // Count tags from search index via getEntriesByTag is expensive;
+  // use a bulk approach: get all entries for each tag once
+  // For efficiency, we compute counts from the flat list
+  for (const tag of allTags) {
+    const entries = await getEntriesByTag(tag);
+    tagCounts[tag] = entries.length;
+  }
+}
+
+function renderTagFilterChips(): void {
+  const container = document.getElementById('tagFilterChips')!;
+  if (allTags.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = '';
+  container.innerHTML = '';
+
+  // "All" chip
+  const allChip = document.createElement('button');
+  allChip.className = `tag-chip${activeTagFilter === null ? ' active' : ''}`;
+  allChip.textContent = '전체';
+  allChip.addEventListener('click', () => {
+    activeTagFilter = null;
+    if (viewMode === 'tag') {
+      renderTagView();
+    } else {
+      renderTagFilterChips();
+      reRenderAllCards();
+    }
+  });
+  container.appendChild(allChip);
+
+  for (const tag of allTags) {
+    const chip = document.createElement('button');
+    chip.className = `tag-chip${activeTagFilter === tag ? ' active' : ''}`;
+    chip.innerHTML = `${escapeHtml(tag)} <span class="tag-count">${tagCounts[tag] ?? 0}</span>`;
+    chip.addEventListener('click', () => {
+      activeTagFilter = tag;
+      if (viewMode === 'tag') {
+        showTagEntries(tag);
+      } else {
+        renderTagFilterChips();
+        showFilteredByTag(tag);
+      }
+    });
+    container.appendChild(chip);
+  }
+}
+
+async function showFilteredByTag(tag: string): Promise<void> {
+  const content = document.getElementById('content')!;
+  const emptyState = document.getElementById('emptyState')!;
+  content.innerHTML = '';
+  content.appendChild(emptyState);
+  document.getElementById('loadMoreWrap')!.style.display = 'none';
+
+  const entries = await getEntriesByTag(tag);
+  if (entries.length === 0) {
+    emptyState.style.display = '';
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  // Group by date
+  const grouped: Record<string, VocabEntry[]> = {};
+  for (const entry of entries) {
+    (grouped[entry.dateAdded] ||= []).push(entry);
+  }
+  const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+  for (const date of dates) {
+    content.appendChild(renderDateGroup(date, grouped[date], ''));
+  }
+}
+
+function renderTagView(): void {
+  const content = document.getElementById('content')!;
+  const emptyState = document.getElementById('emptyState')!;
+  content.innerHTML = '';
+  content.appendChild(emptyState);
+  document.getElementById('loadMoreWrap')!.style.display = 'none';
+  renderTagFilterChips();
+
+  if (allTags.length === 0) {
+    emptyState.style.display = '';
+    emptyState.querySelector('p')!.textContent = '태그가 없습니다.';
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  for (const tag of allTags) {
+    const item = document.createElement('div');
+    item.className = 'tag-group-item';
+    item.innerHTML = `
+      <span class="tag-group-name">${escapeHtml(tag)}</span>
+      <span class="tag-group-count">${tagCounts[tag] ?? 0}개</span>
+    `;
+    item.addEventListener('click', () => {
+      activeTagFilter = tag;
+      showTagEntries(tag);
+    });
+    content.appendChild(item);
+  }
+}
+
+async function showTagEntries(tag: string): Promise<void> {
+  const content = document.getElementById('content')!;
+  const emptyState = document.getElementById('emptyState')!;
+  content.innerHTML = '';
+  content.appendChild(emptyState);
+
+  renderTagFilterChips();
+
+  // Back button
+  const backBtn = document.createElement('button');
+  backBtn.className = 'tag-view-back';
+  backBtn.innerHTML = '&larr; 태그 목록으로';
+  backBtn.addEventListener('click', () => {
+    activeTagFilter = null;
+    renderTagView();
+  });
+  content.appendChild(backBtn);
+
+  const entries = await getEntriesByTag(tag);
+  if (entries.length === 0) {
+    emptyState.style.display = '';
+    return;
+  }
+
+  emptyState.style.display = 'none';
+
+  // Group by date
+  const grouped: Record<string, VocabEntry[]> = {};
+  for (const entry of entries) {
+    (grouped[entry.dateAdded] ||= []).push(entry);
+  }
+  const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+  for (const date of dates) {
+    content.appendChild(renderDateGroup(date, grouped[date], ''));
+  }
+}
+
+function setViewMode(mode: ViewMode): void {
+  viewMode = mode;
+  activeTagFilter = null;
+
+  document.querySelectorAll('.view-mode-btn').forEach((btn) => {
+    btn.classList.toggle('active', (btn as HTMLElement).dataset.mode === mode);
+  });
+
+  const tagChips = document.getElementById('tagFilterChips')!;
+
+  if (mode === 'tag') {
+    tagChips.style.display = '';
+    loadTagData().then(() => renderTagView());
+  } else {
+    tagChips.style.display = 'none';
+    reRenderAllCards();
+  }
 }
 
 // ──────────────── Main ────────────────
@@ -463,6 +667,14 @@ async function syncOnLoad(): Promise<void> {
 document.addEventListener('DOMContentLoaded', () => {
   loadInitial();
   syncOnLoad();
+
+  // View mode selector
+  document.querySelectorAll('.view-mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = (btn as HTMLElement).dataset.mode as ViewMode;
+      setViewMode(mode);
+    });
+  });
 
   // Quiz mode selector
   document.querySelectorAll('.quiz-mode-btn').forEach((btn) => {

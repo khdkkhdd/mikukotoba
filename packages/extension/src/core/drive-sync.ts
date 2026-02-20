@@ -68,6 +68,7 @@ async function rebuildSearchIndex(): Promise<void> {
   const searchEntries: Array<{
     id: string; date: string; word: string;
     reading: string; romaji: string; meaning: string; note: string;
+    tags: string[];
   }> = [];
 
   for (const date of index.dates) {
@@ -77,6 +78,7 @@ async function rebuildSearchIndex(): Promise<void> {
         id: e.id, date: e.dateAdded, word: e.word,
         reading: e.reading, romaji: e.romaji,
         meaning: e.meaning, note: e.note,
+        tags: e.tags ?? [],
       });
     }
   }
@@ -152,9 +154,10 @@ export const DriveSync = {
     }
 
     const localIndex = await getLocalIndex();
+    const isValidDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
     const allDates = new Set([
-      ...localIndex.dates,
-      ...Object.keys(remoteMeta.partitionVersions),
+      ...localIndex.dates.filter(isValidDate),
+      ...Object.keys(remoteMeta.partitionVersions).filter(isValidDate),
     ]);
 
     for (const date of allDates) {
@@ -200,7 +203,9 @@ export const DriveSync = {
     meta.lastSyncTimestamp = Date.now();
     await saveLocalMeta(meta);
 
-    if (changed) {
+    const currentIndex = await getLocalIndex();
+    const hasInvalidDates = currentIndex.dates.some(d => !isValidDate(d));
+    if (changed || hasInvalidDates) {
       await rebuildLocalIndex();
       await rebuildSearchIndex();
     }
@@ -263,7 +268,7 @@ async function rebuildLocalIndex(): Promise<void> {
   let totalCount = 0;
 
   for (const [key, value] of Object.entries(allData)) {
-    if (key.startsWith(VOCAB_PREFIX) && key !== VOCAB_INDEX_KEY) {
+    if (key.startsWith(VOCAB_PREFIX) && key !== VOCAB_INDEX_KEY && key !== SEARCH_INDEX_KEY) {
       const date = key.slice(VOCAB_PREFIX.length);
       const entries = value as VocabEntry[];
       if (entries.length > 0) {

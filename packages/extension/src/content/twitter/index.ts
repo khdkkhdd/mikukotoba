@@ -11,7 +11,11 @@ import { UserHandler } from './user-handler';
 import { TrendHandler } from './trend-handler';
 import { SELECTORS, PROCESSED_ATTR, TRANSLATION_ATTR, isEditableArea } from './utils';
 import { createLogger } from '@/core/logger';
-import './twitter.css';
+import twitterStyles from './twitter.css?inline';
+
+const twitterStyleEl = document.createElement('style');
+twitterStyleEl.textContent = twitterStyles;
+(document.head || document.documentElement).appendChild(twitterStyleEl);
 
 const log = createLogger('Twitter');
 
@@ -52,8 +56,8 @@ export class TwitterHandler implements SiteHandler {
     return url.hostname === 'x.com' || url.hostname === 'twitter.com';
   }
 
-  isEnabled(_settings: UserSettings): boolean {
-    return true; // Always active on Twitter pages
+  isEnabled(settings: UserSettings): boolean {
+    return settings.handlerEnabled?.twitter ?? true;
   }
 
   setStatusIndicator(indicator: StatusIndicator): void {

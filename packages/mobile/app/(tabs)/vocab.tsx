@@ -1,4 +1,4 @@
-import { View, Text, TextInput, Pressable, StyleSheet, SectionList } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, SectionList, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useState, useMemo, useCallback } from 'react';
 import { useDatabase } from '../../src/components/DatabaseContext';
@@ -12,7 +12,7 @@ type ViewMode = 'all' | 'date';
 export default function VocabScreen() {
   const router = useRouter();
   const database = useDatabase();
-  const { entries, dateGroups, totalCount, search } = useVocabStore();
+  const { entries, dateGroups, totalCount, search, allTagCounts, selectedTag, setTagFilter } = useVocabStore();
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
@@ -24,6 +24,14 @@ export default function VocabScreen() {
       search(database, text);
     },
     [database, search]
+  );
+
+  const handleTagFilter = useCallback(
+    (tag: string | null) => {
+      setQuery('');
+      setTagFilter(database, tag);
+    },
+    [database, setTagFilter]
   );
 
   // 캘린더 마킹
@@ -68,7 +76,9 @@ export default function VocabScreen() {
       .map(([date, data]) => ({ title: date, data }));
   }, [filteredEntries]);
 
-  const displayCount = viewMode === 'date' ? filteredEntries.length : totalCount;
+  const displayCount = selectedTag ? filteredEntries.length : viewMode === 'date' ? filteredEntries.length : totalCount;
+  const tagList = Object.entries(allTagCounts).sort(([, a], [, b]) => b - a);
+  const hasTags = tagList.length > 0;
 
   return (
     <View style={styles.container}>
@@ -84,7 +94,35 @@ export default function VocabScreen() {
         </Pressable>
       </View>
 
-      {/* 모드 토글 */}
+      {/* 태그 필터 칩 */}
+      {hasTags && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tagRow}
+          contentContainerStyle={styles.tagRowContent}
+        >
+          <Pressable
+            style={[styles.tagChip, !selectedTag && styles.tagChipActive]}
+            onPress={() => handleTagFilter(null)}
+          >
+            <Text style={[styles.tagChipText, !selectedTag && styles.tagChipTextActive]}>전체</Text>
+          </Pressable>
+          {tagList.map(([tag, count]) => (
+            <Pressable
+              key={tag}
+              style={[styles.tagChip, selectedTag === tag && styles.tagChipActive]}
+              onPress={() => handleTagFilter(selectedTag === tag ? null : tag)}
+            >
+              <Text style={[styles.tagChipText, selectedTag === tag && styles.tagChipTextActive]}>
+                {tag} <Text style={styles.tagChipCount}>{count}</Text>
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* 캘린더 */}
       {calendarOpen && (
         <View style={styles.calendarSection}>
           <Calendar
@@ -128,13 +166,26 @@ export default function VocabScreen() {
               {item.pos ? <Text style={styles.entryPos}>{item.pos}</Text> : null}
             </View>
             <Text style={styles.entryMeaning}>{item.meaning}</Text>
+            {item.tags?.length > 0 && (
+              <View style={styles.entryTags}>
+                {item.tags.map((t) => (
+                  <View key={t} style={styles.entryTag}>
+                    <Text style={styles.entryTagText}>{t}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </Pressable>
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>📚</Text>
             <Text style={styles.emptyText}>
-              {viewMode === 'date' ? '이 날짜에 단어가 없습니다' : '저장된 단어가 없습니다'}
+              {selectedTag
+                ? `"${selectedTag}" 태그에 단어가 없습니다`
+                : viewMode === 'date'
+                  ? '이 날짜에 단어가 없습니다'
+                  : '저장된 단어가 없습니다'}
             </Text>
           </View>
         }
@@ -166,6 +217,35 @@ const styles = StyleSheet.create({
   calendarToggleText: {
     fontSize: 20,
   },
+  tagRow: {
+    maxHeight: 40,
+    marginBottom: spacing.sm,
+  },
+  tagRowContent: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  tagChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.borderLight,
+  },
+  tagChipActive: {
+    backgroundColor: colors.accent,
+  },
+  tagChipText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  tagChipTextActive: {
+    color: '#FFFFFF',
+  },
+  tagChipCount: {
+    fontSize: fontSize.xs,
+    opacity: 0.7,
+  },
   calendarSection: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
@@ -191,7 +271,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     fontSize: fontSize.md,
     color: colors.text,
   },
@@ -201,12 +281,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    marginHorizontal: -spacing.lg,
+    paddingTop: spacing.md,
+    marginBottom: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    marginBottom: spacing.sm,
-    paddingTop: spacing.md,
     backgroundColor: colors.bg,
   },
   sectionDate: { fontSize: fontSize.sm, color: colors.textMuted },
@@ -243,6 +321,23 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontWeight: '500',
     marginTop: spacing.xs,
+  },
+  entryTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: spacing.xs,
+  },
+  entryTag: {
+    backgroundColor: colors.accentLight,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 10,
+  },
+  entryTagText: {
+    fontSize: fontSize.xs,
+    color: colors.accent,
+    fontWeight: '500',
   },
   empty: {
     alignItems: 'center',

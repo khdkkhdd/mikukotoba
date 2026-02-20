@@ -4,6 +4,15 @@ import { buildVocabEntry } from './vocab-add-handler';
 
 let modalContainer: HTMLDivElement | null = null;
 
+async function loadAllTags(): Promise<string[]> {
+  try {
+    const resp = await chrome.runtime.sendMessage({ type: 'VOCAB_GET_TAGS' });
+    return resp?.payload ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export function showVocabModal(
   autoFill: VocabAutoFillResult | null,
   onSave: (entry: VocabEntry) => void,
@@ -53,6 +62,15 @@ export function showVocabModal(
         <label class="vm-label">메모
           <input class="vm-input" id="vm-note" value="" placeholder="선택 입력">
         </label>
+        <div class="vm-tag-section">
+          <div class="vm-label">태그</div>
+          <div class="vm-tag-chips" id="vm-tag-chips"></div>
+          <div class="vm-tag-input-row">
+            <input class="vm-input vm-tag-input" id="vm-tag-input" placeholder="태그 입력..." list="vm-tag-list">
+            <datalist id="vm-tag-list"></datalist>
+            <button class="vm-btn vm-btn-add-tag" id="vm-add-tag">+</button>
+          </div>
+        </div>
         <div class="vm-buttons">
           <button class="vm-btn vm-btn-cancel" id="vm-cancel">취소</button>
           <button class="vm-btn vm-btn-save" id="vm-save">저장</button>
@@ -80,6 +98,51 @@ export function showVocabModal(
   });
 
   if (!isLoading) {
+    const selectedTags: string[] = [];
+
+    // Load existing tags for autocomplete
+    loadAllTags().then((tags) => {
+      const datalist = shadow.getElementById('vm-tag-list');
+      if (datalist) {
+        datalist.innerHTML = tags.map(t => `<option value="${esc(t)}">`).join('');
+      }
+    });
+
+    function renderTagChips(): void {
+      const container = shadow.getElementById('vm-tag-chips')!;
+      container.innerHTML = selectedTags.map((tag, i) =>
+        `<span class="vm-tag-chip">${esc(tag)}<button class="vm-tag-remove" data-idx="${i}">&times;</button></span>`
+      ).join('');
+      container.querySelectorAll('.vm-tag-remove').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt((btn as HTMLElement).dataset.idx!);
+          selectedTags.splice(idx, 1);
+          renderTagChips();
+        });
+      });
+    }
+
+    function addTag(): void {
+      const input = shadow.getElementById('vm-tag-input') as HTMLInputElement;
+      const tag = input.value.trim();
+      if (tag && !selectedTags.includes(tag)) {
+        selectedTags.push(tag);
+        renderTagChips();
+      }
+      input.value = '';
+      input.focus();
+    }
+
+    shadow.getElementById('vm-add-tag')?.addEventListener('click', addTag);
+
+    // Enter key in tag input adds tag
+    shadow.getElementById('vm-tag-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addTag();
+      }
+    });
+
     const cancelBtn = shadow.getElementById('vm-cancel');
     const saveBtn = shadow.getElementById('vm-save');
 
@@ -94,6 +157,7 @@ export function showVocabModal(
         exampleSentence: (shadow.getElementById('vm-example') as HTMLInputElement).value.trim(),
         exampleSource: location.href,
         note: (shadow.getElementById('vm-note') as HTMLInputElement).value.trim(),
+        tags: [...selectedTags],
       });
       onSave(entry);
       removeVocabModal();
@@ -234,6 +298,60 @@ function getModalStyles(): string {
 
     .vm-input:focus {
       border-color: #39C5BB;
+    }
+
+    .vm-tag-section {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .vm-tag-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .vm-tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(57, 197, 187, 0.15);
+      color: #39C5BB;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .vm-tag-remove {
+      background: none;
+      border: none;
+      color: #39C5BB;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 0 2px;
+      line-height: 1;
+    }
+
+    .vm-tag-remove:hover {
+      color: #C94040;
+    }
+
+    .vm-tag-input-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .vm-tag-input {
+      flex: 1;
+    }
+
+    .vm-btn-add-tag {
+      padding: 6px 12px;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1;
     }
 
     .vm-buttons {

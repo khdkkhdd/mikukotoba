@@ -101,15 +101,8 @@ export interface UserSettings {
   youtubeMode: boolean;
   webpageMode: WebpageMode;
 
-  // 사이트별 설정 (확장 가능 구조)
-  siteSettings?: {
-    twitter?: { enabled: boolean };
-    youtube?: {
-      subtitleMode: boolean;
-      pageTranslation: boolean;
-    };
-    webpage?: { mode: WebpageMode };
-  };
+  // 핸들러별 활성화
+  handlerEnabled: HandlerEnabledMap;
 
   // 확장 프로그램 활성화
   enabled: boolean;
@@ -117,6 +110,13 @@ export interface UserSettings {
 
 export type LearningLevel = 'beginner' | 'elementary' | 'intermediate' | 'advanced';
 export type WebpageMode = 'hover' | 'inline' | 'furigana-only' | 'off';
+
+export type HandlerEnabledMap = {
+  'twitter': boolean;
+  'youtube-subtitle': boolean;
+  'youtube-page': boolean;
+  'webpage': boolean;
+};
 
 // 번역 문맥
 export interface TranslationContext {
@@ -211,6 +211,8 @@ export type MessageType =
   | { type: 'VOCAB_SEARCH'; payload: { query: string } }
   | { type: 'VOCAB_EXPORT' }
   | { type: 'VOCAB_IMPORT'; payload: { entries: VocabEntry[] } }
+  | { type: 'VOCAB_GET_TAGS' }
+  | { type: 'VOCAB_GET_BY_TAG'; payload: { tag: string } }
   | { type: 'DRIVE_LOGIN' }
   | { type: 'DRIVE_LOGOUT' }
   | { type: 'DRIVE_GET_STATUS' }
@@ -256,6 +258,13 @@ export const DEFAULT_SETTINGS: UserSettings = {
 
   youtubeMode: true,
   webpageMode: 'hover',
+
+  handlerEnabled: {
+    'twitter': true,
+    'youtube-subtitle': true,
+    'youtube-page': true,
+    'webpage': true,
+  },
 
   enabled: true,
 };

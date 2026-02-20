@@ -52,7 +52,7 @@
   ],
   "commands": {
     "toggle-extension": {
-      "suggested_key": { "default": "Alt+J" },
+      "suggested_key": { "default": "Alt+M" },
       "description": "확장 프로그램 ON/OFF"
     },
     "toggle-furigana": {
@@ -66,6 +66,9 @@
     "toggle-romaji": {
       "suggested_key": { "default": "Alt+R" },
       "description": "로마지 표시 토글"
+    },
+    "cycle-webpage-mode": {
+      "description": "웹페이지 모드 전환 (호버 → 인라인 → 후리가나)"
     }
   }
 }

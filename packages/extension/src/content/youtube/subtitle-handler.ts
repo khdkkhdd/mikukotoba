@@ -36,7 +36,7 @@ export class YouTubeSubtitleHandler implements SiteHandler {
   }
 
   isEnabled(settings: UserSettings): boolean {
-    return settings.youtubeMode;
+    return settings.handlerEnabled?.['youtube-subtitle'] ?? settings.youtubeMode;
   }
 
   setStatusIndicator(_indicator: StatusIndicator): void {

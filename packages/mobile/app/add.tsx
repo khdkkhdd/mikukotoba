@@ -18,7 +18,21 @@ export default function AddScreen() {
     meaning: '',
     pos: '',
     note: '',
+    tags: [] as string[],
   });
+  const [newTag, setNewTag] = useState('');
+
+  const addTag = () => {
+    const tag = newTag.trim();
+    if (tag && !form.tags.includes(tag)) {
+      setForm({ ...form, tags: [...form.tags, tag] });
+    }
+    setNewTag('');
+  };
+
+  const removeTag = (tag: string) => {
+    setForm({ ...form, tags: form.tags.filter((t) => t !== tag) });
+  };
 
   const handleSave = async () => {
     if (!form.word.trim()) {
@@ -37,6 +51,7 @@ export default function AddScreen() {
       exampleSentence: '',
       exampleSource: '',
       note: form.note.trim(),
+      tags: form.tags,
       dateAdded: new Date().toISOString().slice(0, 10),
       timestamp: now,
     };
@@ -53,6 +68,33 @@ export default function AddScreen() {
       <Field label="뜻 (한국어)" value={form.meaning} onChange={(v) => setForm({ ...form, meaning: v })} placeholder="일본어" />
       <Field label="품사" value={form.pos} onChange={(v) => setForm({ ...form, pos: v })} placeholder="名詞" />
       <Field label="메모" value={form.note} onChange={(v) => setForm({ ...form, note: v })} multiline placeholder="학습 메모..." />
+
+      <View style={styles.fieldGroup}>
+        <Text style={styles.fieldLabel}>태그</Text>
+        {form.tags.length > 0 && (
+          <View style={styles.tagChips}>
+            {form.tags.map((t) => (
+              <Pressable key={t} style={styles.tagChip} onPress={() => removeTag(t)}>
+                <Text style={styles.tagChipText}>{t} ✕</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <View style={styles.tagInputRow}>
+          <TextInput
+            style={styles.tagInput}
+            value={newTag}
+            onChangeText={setNewTag}
+            placeholder="태그 추가..."
+            placeholderTextColor={colors.textPlaceholder}
+            onSubmitEditing={addTag}
+            returnKeyType="done"
+          />
+          <Pressable style={styles.tagAddBtn} onPress={addTag}>
+            <Text style={styles.tagAddBtnText}>+</Text>
+          </Pressable>
+        </View>
+      </View>
 
       <Pressable style={styles.saveBtn} onPress={handleSave}>
         <Text style={styles.saveBtnText}>저장</Text>
@@ -108,6 +150,50 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   fieldMultiline: { minHeight: 80, textAlignVertical: 'top' },
+  tagChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  tagChip: {
+    backgroundColor: colors.accentLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  tagChipText: {
+    fontSize: fontSize.sm,
+    color: colors.accent,
+    fontWeight: '500',
+  },
+  tagInputRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  tagInput: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: fontSize.md,
+    color: colors.text,
+  },
+  tagAddBtn: {
+    backgroundColor: colors.accent,
+    borderRadius: 8,
+    width: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagAddBtnText: {
+    fontSize: fontSize.lg,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
   saveBtn: {
     backgroundColor: colors.accent,
     borderRadius: 12,

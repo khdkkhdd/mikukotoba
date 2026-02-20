@@ -70,11 +70,12 @@ export async function autoFillVocab(
  * Build a VocabEntry from the auto-fill result + user edits.
  */
 export function buildVocabEntry(
-  data: Omit<VocabEntry, 'id' | 'dateAdded' | 'timestamp'>,
+  data: Omit<VocabEntry, 'id' | 'dateAdded' | 'timestamp' | 'tags'> & { tags?: string[] },
 ): VocabEntry {
   const now = Date.now();
   return {
     ...data,
+    tags: data.tags ?? [],
     id: `${now}_${Math.random().toString(36).slice(2, 8)}`,
     dateAdded: new Date().toISOString().split('T')[0],
     timestamp: now,

@@ -1,4 +1,4 @@
-import type { MessageType, UserSettings, UsageStats, DayStats, LLMPlatform } from '@/types';
+import type { MessageType, UserSettings, UsageStats, DayStats, LLMPlatform, WebpageMode } from '@/types';
 import { DEFAULT_SETTINGS } from '@/types';
 import { papagoClient } from '@/core/translator/papago';
 import { claudeClient } from '@/core/translator/claude';
@@ -346,6 +346,11 @@ async function handleMessage(
       await VocabStorage.addEntry(message.payload);
       // Auto-add to glossary: vocab → glossary sync
       await addVocabToGlossary(message.payload.word, message.payload.meaning);
+      // Update recent tags
+      const saveTags = message.payload.tags ?? [];
+      if (saveTags.length > 0) {
+        await updateRecentTags(saveTags);
+      }
       sendResponse({ success: true });
       // Fire-and-forget: push to Drive
       DriveSync.pushPartition(message.payload.dateAdded).catch(() => {});
@@ -395,6 +400,18 @@ async function handleMessage(
       sendResponse({ payload: { added } });
       break;
     }
+
+    case 'VOCAB_GET_TAGS': {
+      const tags = await VocabStorage.getAllTags();
+      sendResponse({ payload: tags });
+      break;
+    }
+
+    case 'VOCAB_GET_BY_TAG': {
+      const tagEntries = await VocabStorage.getEntriesByTag(message.payload.tag);
+      sendResponse({ payload: tagEntries });
+      break;
+    }
   }
 }
 
@@ -437,6 +454,20 @@ chrome.commands.onCommand.addListener(async (command) => {
       await saveSettings({ showRomaji: currentSettings.showRomaji });
       await broadcastToAllTabs({ type: 'SETTINGS_CHANGED', payload: currentSettings });
       break;
+
+    case 'cycle-webpage-mode': {
+      const modes: WebpageMode[] = ['hover', 'inline', 'furigana-only'];
+      const idx = modes.indexOf(currentSettings.webpageMode);
+      currentSettings.webpageMode = modes[(idx + 1) % modes.length];
+      await saveSettings({ webpageMode: currentSettings.webpageMode });
+      await broadcastToAllTabs({ type: 'SETTINGS_CHANGED', payload: currentSettings });
+      // Also send MODE_CHANGED for content script handling
+      await broadcastToAllTabs({
+        type: 'MODE_CHANGED',
+        payload: { mode: currentSettings.webpageMode },
+      });
+      break;
+    }
   }
 });
 
@@ -472,6 +503,21 @@ chrome.runtime.onInstalled.addListener(async () => {
  * Add a vocab entry to the custom glossary (auto-sync).
  * Skips if the word already exists in the glossary.
  */
+const RECENT_TAGS_KEY = 'jp_vocab_recent_tags';
+const MAX_RECENT_TAGS = 5;
+
+async function updateRecentTags(tags: string[]): Promise<void> {
+  try {
+    const data = await chrome.storage.local.get(RECENT_TAGS_KEY);
+    const recent: string[] = data[RECENT_TAGS_KEY] || [];
+    // Prepend new tags, deduplicate, keep max
+    const updated = [...new Set([...tags, ...recent])].slice(0, MAX_RECENT_TAGS);
+    await chrome.storage.local.set({ [RECENT_TAGS_KEY]: updated });
+  } catch {
+    // Best effort
+  }
+}
+
 const GLOSSARY_STORAGE_KEY = 'jp_glossary_custom';
 
 async function addVocabToGlossary(japanese: string, korean: string): Promise<void> {

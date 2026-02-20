@@ -518,6 +518,7 @@ input[type="color"] {
 
 .shortcut-table td:first-child {
   width: 120px;
+  white-space: nowrap;
 }
 
 kbd {
@@ -528,6 +529,19 @@ kbd {
   font-size: 12px;
   font-family: monospace;
   color: #2D3436;
+}
+
+/* Platform-aware key display: show only the relevant one */
+kbd.key-mac { display: none; margin-left: 6px; }
+kbd.key-win { display: inline; }
+
+.is-mac kbd.key-mac { display: inline; }
+.is-mac kbd.key-win { display: none; }
+
+.key-unset {
+  font-size: 11px;
+  color: #8E9AA4;
+  font-style: italic;
 }
 
 /* Details / Advanced settings */

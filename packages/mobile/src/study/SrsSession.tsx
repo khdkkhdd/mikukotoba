@@ -5,7 +5,13 @@ import type { Card, Grade } from 'ts-fsrs';
 import { useDatabase } from '../components/DatabaseContext';
 import { useSettingsStore } from '../stores/settings-store';
 import { computeReview, getSchedulingPreview, Rating, saveCardState } from '../fsrs';
-import { getDueCardsWithEntries, getNewCardsWithEntries, getTodayNewCardCount } from '../db/queries';
+import {
+  getDueCardsWithEntries,
+  getNewCardsWithEntries,
+  getTodayNewCardCount,
+  getDueCardsWithEntriesByTag,
+  getNewCardsWithEntriesByTag,
+} from '../db/queries';
 import { markFsrsDirty, markReviewLogDirty } from '../services/sync-manager';
 import { StudyCard } from './StudyCard';
 import {
@@ -107,9 +113,10 @@ const initialState: StudyViewState = {
 interface SrsSessionProps {
   onExit: () => void;
   onStartRelay?: () => void;
+  filterTag?: string;
 }
 
-export function SrsSession({ onExit, onStartRelay }: SrsSessionProps) {
+export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps) {
   const database = useDatabase();
   const dailyNewCards = useSettingsStore((s) => s.dailyNewCards);
   const [state, dispatch] = useReducer(studyReducer, initialState);
@@ -126,8 +133,12 @@ export function SrsSession({ onExit, onStartRelay }: SrsSessionProps) {
       const remainingNew = Math.max(0, dailyNewCards - todayNew);
 
       const [dueResults, newResults] = await Promise.all([
-        getDueCardsWithEntries(database),
-        getNewCardsWithEntries(database, remainingNew),
+        filterTag !== undefined
+          ? getDueCardsWithEntriesByTag(database, filterTag || null)
+          : getDueCardsWithEntries(database),
+        filterTag !== undefined
+          ? getNewCardsWithEntriesByTag(database, filterTag || null, remainingNew)
+          : getNewCardsWithEntries(database, remainingNew),
       ]);
 
       if (cancelled) return;
@@ -147,7 +158,7 @@ export function SrsSession({ onExit, onStartRelay }: SrsSessionProps) {
 
     init();
     return () => { cancelled = true; };
-  }, [database, dailyNewCards]);
+  }, [database, dailyNewCards, filterTag]);
 
   // 동적 setTimeout — waiting 타이머
   useEffect(() => {
@@ -229,6 +240,9 @@ export function SrsSession({ onExit, onStartRelay }: SrsSessionProps) {
   const now = Date.now();
   const view = selectNextCard(state.session, now);
   const counts = getCounts(state.session);
+  const headerTitle = filterTag !== undefined
+    ? (filterTag === '' ? '학습: 태그 없음' : `학습: ${filterTag}`)
+    : '오늘의 학습';
 
   // 대기 화면
   if (view.type === 'waiting') {
@@ -237,7 +251,7 @@ export function SrsSession({ onExit, onStartRelay }: SrsSessionProps) {
     const sec = remainSec % 60;
     return (
       <View style={styles.container}>
-        <SessionHeader title="오늘의 학습" onClose={handleHeaderExit} />
+        <SessionHeader title={headerTitle} onClose={handleHeaderExit} />
         <CountBar counts={counts} />
         <View style={styles.waitingCard}>
           <Text style={styles.waitingIcon}>⏳</Text>
@@ -257,7 +271,7 @@ export function SrsSession({ onExit, onStartRelay }: SrsSessionProps) {
   if (view.type === 'complete') {
     return (
       <View style={styles.container}>
-        <SessionHeader title="오늘의 학습" onClose={onExit} />
+        <SessionHeader title={headerTitle} onClose={onExit} />
         <View style={styles.completeCard}>
           <Text style={styles.completeIcon}>🎉</Text>
           <Text style={styles.completeTitle}>학습 완료!</Text>
@@ -285,7 +299,7 @@ export function SrsSession({ onExit, onStartRelay }: SrsSessionProps) {
 
   return (
     <View style={styles.container}>
-      <SessionHeader title="오늘의 학습" onClose={handleHeaderExit} />
+      <SessionHeader title={headerTitle} onClose={handleHeaderExit} />
       <CountBar counts={counts} />
 
       <View style={styles.cardArea}>

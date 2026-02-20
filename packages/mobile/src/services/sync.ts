@@ -81,8 +81,9 @@ export async function pullFromDrive(database: SQLiteDatabase): Promise<SyncResul
     }
   }
 
-  // Merge all remote partitions that are newer
-  const allDates = Object.keys(remoteMeta.partitionVersions);
+  // Merge all remote partitions that are newer (skip invalid date keys)
+  const isValidDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+  const allDates = Object.keys(remoteMeta.partitionVersions).filter(isValidDate);
 
   for (const date of allDates) {
     const localVersion = meta.partitionVersions[date] || 0;

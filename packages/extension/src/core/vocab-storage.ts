@@ -12,6 +12,7 @@ interface SearchEntry {
   romaji: string;
   meaning: string;
   note: string;
+  tags: string[];
 }
 
 function dateKey(date: string): string {
@@ -62,6 +63,7 @@ function toSearchEntry(e: VocabEntry): SearchEntry {
     romaji: e.romaji,
     meaning: e.meaning,
     note: e.note,
+    tags: e.tags ?? [],
   };
 }
 
@@ -148,7 +150,8 @@ export const VocabStorage = {
         s.meaning.toLowerCase().includes(q) ||
         s.reading.includes(q) ||
         s.romaji.toLowerCase().includes(q) ||
-        s.note.toLowerCase().includes(q)
+        s.note.toLowerCase().includes(q) ||
+        s.tags?.some(t => t.toLowerCase().includes(q))
       ) {
         const ids = matchingByDate.get(s.date) || [];
         ids.push(s.id);
@@ -229,6 +232,43 @@ export const VocabStorage = {
     await saveSearchIndex(searchIndex);
 
     return added;
+  },
+
+  async getAllTags(): Promise<string[]> {
+    const searchIndex = await getSearchIndex();
+    const tagSet = new Set<string>();
+    for (const s of searchIndex) {
+      for (const t of s.tags ?? []) {
+        tagSet.add(t);
+      }
+    }
+    return [...tagSet].sort();
+  },
+
+  async getEntriesByTag(tag: string): Promise<VocabEntry[]> {
+    const searchIndex = await getSearchIndex();
+    const matchingByDate = new Map<string, string[]>();
+    for (const s of searchIndex) {
+      if (s.tags?.includes(tag)) {
+        const ids = matchingByDate.get(s.date) || [];
+        ids.push(s.id);
+        matchingByDate.set(s.date, ids);
+      }
+    }
+    if (matchingByDate.size === 0) return [];
+
+    const dates = [...matchingByDate.keys()];
+    const keys = dates.map(dateKey);
+    const data = await chrome.storage.local.get(keys);
+    const results: VocabEntry[] = [];
+    for (const date of dates) {
+      const entries: VocabEntry[] = data[dateKey(date)] || [];
+      const matchIds = new Set(matchingByDate.get(date)!);
+      for (const e of entries) {
+        if (matchIds.has(e.id)) results.push(e);
+      }
+    }
+    return results;
   },
 
   /**

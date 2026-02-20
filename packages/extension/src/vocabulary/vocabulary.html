@@ -10,24 +10,31 @@
   <div class="vocab-page">
     <header class="page-header">
       <div class="header-row-1">
-        <h1><span class="logo-badge">JP</span> 단어장</h1>
-        <span class="total-count" id="totalCount">0개</span>
-        <span class="sync-indicator" id="syncIndicator" title="동기화 상태"></span>
-      </div>
-      <div class="header-row-2">
-        <div class="quiz-mode-selector" id="quizModeSelector">
-          <button class="quiz-mode-btn active" data-mode="normal">일반</button>
-          <button class="quiz-mode-btn" data-mode="hide-meaning">뜻 맞추기</button>
-          <button class="quiz-mode-btn" data-mode="hide-word">단어 맞추기</button>
-        </div>
-        <div class="search-box">
-          <input type="text" id="searchInput" placeholder="검색..." class="search-input">
+        <div class="header-title">
+          <h1><span class="logo-badge">JP</span> 단어장</h1>
+          <span class="total-count" id="totalCount">0개</span>
+          <span class="sync-indicator" id="syncIndicator" title="동기화 상태"></span>
         </div>
         <div class="header-actions">
           <button id="importBtn" class="btn" title="JSON 가져오기">가져오기</button>
           <button id="exportBtn" class="btn" title="JSON 내보내기">내보내기</button>
         </div>
       </div>
+      <div class="header-row-2">
+        <div class="header-selectors">
+          <div class="view-mode-selector" id="viewModeSelector">
+            <button class="view-mode-btn active" data-mode="date">날짜별</button>
+            <button class="view-mode-btn" data-mode="tag">태그별</button>
+          </div>
+          <div class="quiz-mode-selector" id="quizModeSelector">
+            <button class="quiz-mode-btn active" data-mode="normal">일반</button>
+            <button class="quiz-mode-btn" data-mode="hide-meaning">뜻 맞추기</button>
+            <button class="quiz-mode-btn" data-mode="hide-word">단어 맞추기</button>
+          </div>
+        </div>
+        <input type="text" id="searchInput" placeholder="검색..." class="search-input">
+      </div>
+      <div class="tag-filter-chips" id="tagFilterChips" style="display: none;"></div>
     </header>
 
     <main id="content" class="content">

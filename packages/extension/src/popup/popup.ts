@@ -1,4 +1,4 @@
-import type { UserSettings, LearningLevel, WebpageMode, LLMPlatform } from '@/types';
+import type { UserSettings, LearningLevel, WebpageMode, LLMPlatform, HandlerEnabledMap } from '@/types';
 import { DEFAULT_SETTINGS } from '@/types';
 import { getModelsForPlatform } from '@/core/translator/llm-registry';
 
@@ -62,14 +62,17 @@ function updateUI(): void {
   const enableToggle = document.getElementById('enableToggle') as HTMLInputElement;
   enableToggle.checked = settings.enabled;
 
-  // YouTube toggle (independent)
-  const youtubeToggle = document.getElementById('youtubeToggle') as HTMLInputElement;
-  youtubeToggle.checked = settings.youtubeMode;
+  // Handler toggles
+  const he = settings.handlerEnabled;
+  (document.getElementById('handlerTwitter') as HTMLInputElement).checked = he?.twitter ?? true;
+  (document.getElementById('handlerYoutubeSubtitle') as HTMLInputElement).checked = he?.['youtube-subtitle'] ?? true;
+  (document.getElementById('handlerYoutubePage') as HTMLInputElement).checked = he?.['youtube-page'] ?? true;
+  (document.getElementById('handlerWebpage') as HTMLInputElement).checked = he?.webpage ?? true;
 
-  // Webpage mode radios
-  const modeRadios = document.querySelectorAll<HTMLInputElement>('input[name="mode"]');
-  for (const radio of modeRadios) {
-    radio.checked = radio.value === settings.webpageMode;
+  // Webpage mode segment control
+  const segmentBtns = document.querySelectorAll<HTMLButtonElement>('#webpageModeSegment .segment-btn');
+  for (const btn of segmentBtns) {
+    btn.classList.toggle('active', btn.dataset.mode === settings.webpageMode);
   }
 
   // Learning level
@@ -142,16 +145,31 @@ function setupEventListeners(): void {
     });
   });
 
-  // YouTube toggle (independent of webpage mode)
-  document.getElementById('youtubeToggle')!.addEventListener('change', (e) => {
-    const youtubeMode = (e.target as HTMLInputElement).checked;
-    saveAndBroadcast({ youtubeMode });
-  });
+  // Handler toggles
+  const handlerToggleIds: { elId: string; key: keyof HandlerEnabledMap }[] = [
+    { elId: 'handlerTwitter', key: 'twitter' },
+    { elId: 'handlerYoutubeSubtitle', key: 'youtube-subtitle' },
+    { elId: 'handlerYoutubePage', key: 'youtube-page' },
+    { elId: 'handlerWebpage', key: 'webpage' },
+  ];
 
-  // Webpage mode radios (independent of YouTube mode)
-  document.querySelectorAll<HTMLInputElement>('input[name="mode"]').forEach((radio) => {
-    radio.addEventListener('change', (e) => {
-      const value = (e.target as HTMLInputElement).value as WebpageMode;
+  for (const { elId, key } of handlerToggleIds) {
+    document.getElementById(elId)!.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      const handlerEnabled = { ...(settings.handlerEnabled ?? {}), [key]: checked } as HandlerEnabledMap;
+      const extra: Partial<UserSettings> = { handlerEnabled };
+      // YouTube 자막 토글은 youtubeMode도 동기화 (하위 호환)
+      if (key === 'youtube-subtitle') {
+        extra.youtubeMode = checked;
+      }
+      saveAndBroadcast(extra);
+    });
+  }
+
+  // Webpage mode segment control
+  document.querySelectorAll<HTMLButtonElement>('#webpageModeSegment .segment-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const value = btn.dataset.mode as WebpageMode;
       saveAndBroadcast({ webpageMode: value });
 
       // Notify content script about mode change

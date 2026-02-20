@@ -57,6 +57,14 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
   `);
 
   await migrateCardStateLearningSteps(db);
+  await migrateVocabTags(db);
+}
+
+async function migrateVocabTags(db: SQLiteDatabase): Promise<void> {
+  const cols = await db.getAllAsync<{ name: string }>('PRAGMA table_info(vocab)');
+  if (!cols.some((c) => c.name === 'tags')) {
+    await db.execAsync("ALTER TABLE vocab ADD COLUMN tags TEXT DEFAULT '[]'");
+  }
 }
 
 async function migrateCardStateLearningSteps(db: SQLiteDatabase): Promise<void> {

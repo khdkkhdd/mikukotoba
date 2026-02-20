@@ -22,7 +22,11 @@ import {
 } from './utils';
 
 import { createLogger } from '@/core/logger';
-import './youtube-page.css';
+import ytPageStyles from './youtube-page.css?inline';
+
+const ytPageStyleEl = document.createElement('style');
+ytPageStyleEl.textContent = ytPageStyles;
+(document.head || document.documentElement).appendChild(ytPageStyleEl);
 
 const log = createLogger('YouTube:Page');
 
@@ -68,7 +72,7 @@ export class YouTubePageHandler implements SiteHandler {
   }
 
   isEnabled(settings: UserSettings): boolean {
-    return settings.webpageMode !== 'off';
+    return (settings.handlerEnabled?.['youtube-page'] ?? true) && settings.webpageMode !== 'off';
   }
 
   setStatusIndicator(indicator: StatusIndicator): void {

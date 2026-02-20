@@ -3,6 +3,12 @@ import type { VocabEntry, DriveCardState, DriveReviewLogEntry } from '@mikukotob
 import { createEmptyCard, type Card, State } from 'ts-fsrs';
 
 // VocabEntry ↔ DB row 변환
+
+function parseTags(raw: unknown): string[] {
+  if (typeof raw !== 'string' || !raw) return [];
+  try { return JSON.parse(raw); } catch { return []; }
+}
+
 function entryToRow(e: VocabEntry) {
   return {
     $id: e.id,
@@ -14,6 +20,7 @@ function entryToRow(e: VocabEntry) {
     $example_sentence: e.exampleSentence,
     $example_source: e.exampleSource,
     $note: e.note,
+    $tags: JSON.stringify(e.tags ?? []),
     $date_added: e.dateAdded,
     $timestamp: e.timestamp,
     $updated_at: e.timestamp,
@@ -31,6 +38,7 @@ function rowToEntry(row: Record<string, unknown>): VocabEntry {
     exampleSentence: (row.example_sentence as string) ?? '',
     exampleSource: (row.example_source as string) ?? '',
     note: (row.note as string) ?? '',
+    tags: parseTags(row.tags),
     dateAdded: row.date_added as string,
     timestamp: row.timestamp as number,
   };
@@ -62,8 +70,8 @@ export async function getEntryById(db: SQLiteDatabase, id: string): Promise<Voca
 export async function upsertEntry(db: SQLiteDatabase, entry: VocabEntry): Promise<void> {
   const params = entryToRow(entry);
   await db.runAsync(
-    `INSERT OR REPLACE INTO vocab (id, word, reading, romaji, meaning, pos, example_sentence, example_source, note, date_added, timestamp, updated_at)
-     VALUES ($id, $word, $reading, $romaji, $meaning, $pos, $example_sentence, $example_source, $note, $date_added, $timestamp, $updated_at)`,
+    `INSERT OR REPLACE INTO vocab (id, word, reading, romaji, meaning, pos, example_sentence, example_source, note, tags, date_added, timestamp, updated_at)
+     VALUES ($id, $word, $reading, $romaji, $meaning, $pos, $example_sentence, $example_source, $note, $tags, $date_added, $timestamp, $updated_at)`,
     params
   );
 }
@@ -83,9 +91,9 @@ export async function deleteEntry(db: SQLiteDatabase, id: string): Promise<void>
 export async function searchEntries(db: SQLiteDatabase, query: string): Promise<VocabEntry[]> {
   const pattern = `%${query}%`;
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM vocab WHERE word LIKE ? OR reading LIKE ? OR meaning LIKE ? OR note LIKE ?
+    `SELECT * FROM vocab WHERE word LIKE ? OR reading LIKE ? OR meaning LIKE ? OR note LIKE ? OR tags LIKE ?
      ORDER BY timestamp DESC LIMIT 100`,
-    [pattern, pattern, pattern, pattern]
+    [pattern, pattern, pattern, pattern, pattern]
   );
   return rows.map(rowToEntry);
 }
@@ -299,6 +307,113 @@ export async function getCountByDateRange(
     [startDate, endDate]
   );
   return result?.count ?? 0;
+}
+
+// --- 태그 쿼리 ---
+
+export async function getAllTagCounts(db: SQLiteDatabase): Promise<Record<string, number>> {
+  const rows = await db.getAllAsync<{ tags: string }>('SELECT tags FROM vocab');
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    for (const tag of parseTags(row.tags)) {
+      counts[tag] = (counts[tag] ?? 0) + 1;
+    }
+  }
+  return counts;
+}
+
+export async function getEntriesByTag(db: SQLiteDatabase, tag: string): Promise<VocabEntry[]> {
+  const pattern = `%${tag}%`;
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    'SELECT * FROM vocab WHERE tags LIKE ? ORDER BY timestamp DESC',
+    [pattern]
+  );
+  return rows.map(rowToEntry).filter((e) => e.tags.includes(tag));
+}
+
+export async function getDueCardsWithEntriesByTag(
+  db: SQLiteDatabase,
+  tag: string | null
+): Promise<CardWithEntry[]> {
+  const now = new Date().toISOString();
+
+  if (tag === null) {
+    const rows = await db.getAllAsync<Record<string, unknown>>(
+      `SELECT v.*, cs.state as cs_state, cs.due as cs_due, cs.stability, cs.difficulty,
+              cs.elapsed_days, cs.scheduled_days, cs.reps, cs.lapses, cs.last_review, cs.learning_steps
+       FROM card_state cs
+       JOIN vocab v ON v.id = cs.vocab_id
+       WHERE cs.due <= ? AND (v.tags IS NULL OR v.tags = '[]')
+       ORDER BY cs.due ASC`,
+      [now]
+    );
+    return rows.map(rowToCardWithEntry);
+  }
+
+  const pattern = `%${tag}%`;
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT v.*, cs.state as cs_state, cs.due as cs_due, cs.stability, cs.difficulty,
+            cs.elapsed_days, cs.scheduled_days, cs.reps, cs.lapses, cs.last_review, cs.learning_steps
+     FROM card_state cs
+     JOIN vocab v ON v.id = cs.vocab_id
+     WHERE cs.due <= ? AND v.tags LIKE ?
+     ORDER BY cs.due ASC`,
+    [now, pattern]
+  );
+  return rows.map(rowToCardWithEntry).filter((r) => r.entry.tags.includes(tag));
+}
+
+export async function getNewCardsWithEntriesByTag(
+  db: SQLiteDatabase,
+  tag: string | null,
+  limit: number
+): Promise<CardWithEntry[]> {
+  if (tag === null) {
+    const rows = await db.getAllAsync<Record<string, unknown>>(
+      `SELECT v.*, NULL as cs_state, NULL as cs_due, NULL as stability, NULL as difficulty,
+              NULL as elapsed_days, NULL as scheduled_days, NULL as reps, NULL as lapses,
+              NULL as last_review, NULL as learning_steps
+       FROM vocab v
+       LEFT JOIN card_state cs ON v.id = cs.vocab_id
+       WHERE cs.vocab_id IS NULL AND (v.tags IS NULL OR v.tags = '[]')
+       ORDER BY v.timestamp ASC LIMIT ?`,
+      [limit]
+    );
+    return rows.map((row) => ({ entry: rowToEntry(row), card: newEmptyCard() }));
+  }
+
+  const pattern = `%${tag}%`;
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT v.*, NULL as cs_state, NULL as cs_due, NULL as stability, NULL as difficulty,
+            NULL as elapsed_days, NULL as scheduled_days, NULL as reps, NULL as lapses,
+            NULL as last_review, NULL as learning_steps
+     FROM vocab v
+     LEFT JOIN card_state cs ON v.id = cs.vocab_id
+     WHERE cs.vocab_id IS NULL AND v.tags LIKE ?
+     ORDER BY v.timestamp ASC LIMIT ?`,
+    [pattern, limit * 2]
+  );
+  return rows
+    .map((row) => ({ entry: rowToEntry(row), card: newEmptyCard() }))
+    .filter((r) => r.entry.tags.includes(tag))
+    .slice(0, limit);
+}
+
+export async function getDueCountByTag(db: SQLiteDatabase): Promise<Record<string, number>> {
+  const now = new Date().toISOString();
+  const rows = await db.getAllAsync<{ tags: string }>(
+    `SELECT v.tags FROM card_state cs JOIN vocab v ON v.id = cs.vocab_id WHERE cs.due <= ?`,
+    [now]
+  );
+  const counts: Record<string, number> = {};
+  let untagged = 0;
+  for (const row of rows) {
+    const tags = parseTags(row.tags);
+    if (tags.length === 0) { untagged++; continue; }
+    for (const t of tags) { counts[t] = (counts[t] ?? 0) + 1; }
+  }
+  if (untagged > 0) counts[''] = untagged;
+  return counts;
 }
 
 // --- 통계 쿼리 ---

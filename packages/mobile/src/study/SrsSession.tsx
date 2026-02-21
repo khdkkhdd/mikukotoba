@@ -21,6 +21,7 @@ import {
   promoteWaiting,
   getCounts,
   type SessionState,
+  type SessionView,
   type StudyItem,
 } from './study-session';
 import { colors, spacing, fontSize } from '../components/theme';
@@ -29,6 +30,7 @@ import { colors, spacing, fontSize } from '../components/theme';
 
 interface StudyViewState {
   session: SessionState | null;
+  currentView: SessionView | null;
   showAnswer: boolean;
   showReadingHint: boolean;
   showExampleHint: boolean;
@@ -52,6 +54,7 @@ function studyReducer(state: StudyViewState, action: StudyAction): StudyViewStat
       return {
         ...state,
         session: action.session,
+        currentView: selectNextCard(action.session, now),
         showAnswer: false,
         showReadingHint: false,
         showExampleHint: false,
@@ -70,6 +73,7 @@ function studyReducer(state: StudyViewState, action: StudyAction): StudyViewStat
       return {
         ...state,
         session: nextSession,
+        currentView: selectNextCard(nextSession, now),
         showAnswer: false,
         showReadingHint: false,
         showExampleHint: false,
@@ -84,7 +88,11 @@ function studyReducer(state: StudyViewState, action: StudyAction): StudyViewStat
       if (!state.session) return state;
       const promoted = promoteWaiting(state.session, now);
       if (promoted === state.session) return state; // 리렌더링 방지
-      return { ...state, session: promoted };
+      // 대기 화면일 때만 다음 카드로 전환 (카드 학습 중에는 현재 카드 유지)
+      const newView = state.currentView?.type === 'waiting'
+        ? selectNextCard(promoted, now)
+        : state.currentView;
+      return { ...state, session: promoted, currentView: newView };
     }
 
     case 'SHOW_ANSWER':
@@ -100,6 +108,7 @@ function studyReducer(state: StudyViewState, action: StudyAction): StudyViewStat
 
 const initialState: StudyViewState = {
   session: null,
+  currentView: null,
   showAnswer: false,
   showReadingHint: false,
   showExampleHint: false,
@@ -209,9 +218,7 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
   );
 
   const handleHeaderExit = useCallback(() => {
-    if (!state.session) return onExit();
-    const v = selectNextCard(state.session, Date.now());
-    if (v.type === 'complete') return onExit();
+    if (!state.currentView || state.currentView.type === 'complete') return onExit();
     Alert.alert(
       '학습을 중단할까요?',
       '진행한 내용은 저장됩니다.',
@@ -220,11 +227,11 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
         { text: '중단하기', style: 'destructive', onPress: onExit },
       ],
     );
-  }, [state.session, onExit]);
+  }, [state.currentView, onExit]);
 
   // --- 렌더링 ---
 
-  if (state.isLoading || !state.session) {
+  if (state.isLoading || !state.session || !state.currentView) {
     return (
       <View style={styles.container}>
         <Text style={styles.loadingText}>카드 준비 중...</Text>
@@ -232,7 +239,7 @@ export function SrsSession({ onExit, onStartRelay, filterTag }: SrsSessionProps)
     );
   }
 
-  const view = selectNextCard(state.session, now);
+  const view = state.currentView;
   const counts = getCounts(state.session);
 
   // 대기 화면

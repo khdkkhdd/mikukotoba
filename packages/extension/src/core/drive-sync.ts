@@ -194,9 +194,14 @@ export const DriveSync = {
 
     const localIndex = await getLocalIndex();
     const isValidDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+    const vocabDatePattern = /^vocab_(\d{4}-\d{2}-\d{2})\.json$/;
     const allDates = new Set([
       ...localIndex.dates.filter(isValidDate),
       ...Object.keys(remoteMeta.partitionVersions).filter(isValidDate),
+      // Drive fileIdMap에서 vocab 파일 날짜 발견 (메타데이터 누락 복구)
+      ...[...ctx.fileIdMap.keys()]
+        .map(name => name.match(vocabDatePattern)?.[1])
+        .filter((d): d is string => d != null && isValidDate(d)),
     ]);
 
     // 날짜를 카테고리별로 분류
@@ -251,7 +256,7 @@ export const DriveSync = {
           ctx.versionPatches.partitionVersions[date] = version;
           pushed += pushChanges;
         } else {
-          meta.partitionVersions[date] = remoteVersion;
+          meta.partitionVersions[date] = remoteVersion || remote.version || Date.now();
         }
       } catch {
         // Skip this partition on error
@@ -269,23 +274,41 @@ export const DriveSync = {
       }
     }
 
-    // init (0/0) 파티션 — 로컬에 있으면 push
+    // init (0/0) 파티션 — 로컬에 있으면 push, Drive에만 있으면 pull
     const initResults = await parallelMap(initDates, async (date) => {
       const localEntries = await getLocalEntries(date);
       if (localEntries.length > 0) {
-        return pushPartitionCore(token, date, meta, ctx);
+        return { pushed: await pushPartitionCore(token, date, meta, ctx), pulled: 0 };
       }
-      return 0;
+      // 로컬 데이터 없음 — Drive에 파일이 있으면 pull
+      const fileName = drivePartitionName(date);
+      const fileId = resolveFileId(ctx.fileIdMap, ctx.localDriveFileIds, fileName);
+      if (fileId) {
+        const remote = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
+        const merged = mergeEntries(remote.entries, [], meta.deletedEntries);
+        if (merged.length > 0) {
+          await saveLocalEntries(date, merged);
+          const version = remote.version || Date.now();
+          meta.partitionVersions[date] = version;
+          ctx.versionPatches.partitionVersions[date] = version;
+          return { pushed: 0, pulled: merged.length };
+        }
+      }
+      return { pushed: 0, pulled: 0 };
     });
     for (const result of initResults) {
       if (result.status === 'fulfilled') {
-        pushed += result.value;
+        pushed += result.value.pushed;
+        const initPulled = result.value.pulled;
+        pulled += initPulled;
+        if (initPulled > 0) changed = true;
         meta = await getLocalMeta();
       }
     }
 
     // commitSyncMeta: 재읽기 + 머지 + 1회 쓰기
-    if (pushed > 0) {
+    const hasVersionPatches = Object.keys(ctx.versionPatches.partitionVersions).length > 0;
+    if (pushed > 0 || hasVersionPatches) {
       await commitSyncMeta(ctx);
     }
 
@@ -492,21 +515,31 @@ async function pushPartitionImmediate(date: string): Promise<number> {
     reviewPartitionVersions: remoteReviewPartitionVersions,
   };
 
+  // 로컬 meta 먼저 저장 — Drive write 실패해도 다음 sync에서 localVersion > remoteVersion으로 재시도
+  await saveLocalMeta(meta);
+
   // meta write + index write 병렬화 (~200ms 절약)
   const localIndex = await getLocalIndex();
   const indexFileId = await ensureDriveFileId(token, meta, DRIVE_INDEX_FILE);
 
-  const metaWritePromise = metaFileId
-    ? DriveAPI.updateFile(token, metaFileId, remoteSyncMeta)
-    : DriveAPI.createFile(token, DRIVE_META_FILE, remoteSyncMeta).then(newId => { meta.driveFileIds[DRIVE_META_FILE] = newId; });
+  try {
+    let newFileIds = false;
+    const metaWritePromise = metaFileId
+      ? DriveAPI.updateFile(token, metaFileId, remoteSyncMeta)
+      : DriveAPI.createFile(token, DRIVE_META_FILE, remoteSyncMeta).then(newId => { meta.driveFileIds[DRIVE_META_FILE] = newId; newFileIds = true; });
 
-  const indexWritePromise = indexFileId
-    ? DriveAPI.updateFile(token, indexFileId, localIndex)
-    : DriveAPI.createFile(token, DRIVE_INDEX_FILE, localIndex).then(newId => { meta.driveFileIds[DRIVE_INDEX_FILE] = newId; });
+    const indexWritePromise = indexFileId
+      ? DriveAPI.updateFile(token, indexFileId, localIndex)
+      : DriveAPI.createFile(token, DRIVE_INDEX_FILE, localIndex).then(newId => { meta.driveFileIds[DRIVE_INDEX_FILE] = newId; newFileIds = true; });
 
-  await Promise.all([metaWritePromise, indexWritePromise]);
+    await Promise.all([metaWritePromise, indexWritePromise]);
 
-  await saveLocalMeta(meta);
+    // 새 driveFileIds 반영을 위해 재저장
+    if (newFileIds) await saveLocalMeta(meta);
+  } catch (e) {
+    console.error('[SYNC] pushPartitionImmediate: Drive meta/index write failed, will retry next sync:', e);
+  }
+
   return changedCount;
 }
 

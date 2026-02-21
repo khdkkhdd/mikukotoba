@@ -16,6 +16,7 @@ let dirtyReviewMonths = new Set<string>();
 let dirtyVocabDates = new Set<string>();
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let isFlushing = false;
+let isPulling = false;
 let appStateSubscription: NativeEventSubscription | null = null;
 
 function startDebounce() {
@@ -84,42 +85,49 @@ export async function fullSync(db: SQLiteDatabase): Promise<{ vocabPulled: numbe
   database = db;
   await flush();
 
-  // SyncContext 생성: listFiles 1회 + meta 1회
-  const result = await createSyncContextFromDb(db);
-  if (!result) {
-    return { vocabPulled: 0, vocabPushed: 0, fsrsPulled: false };
-  }
-  const { ctx } = result;
+  if (isPulling) return { vocabPulled: 0, vocabPushed: 0, fsrsPulled: false };
+  isPulling = true;
 
-  // 3종 pull 병렬
-  const [vocabResult, fsrsPulled] = await Promise.all([
-    pullFromDrive(db, ctx),
-    pullFsrsPartitions(db, ctx),
-    pullReviewLogPartitions(db, ctx),
-  ]);
+  try {
+    // SyncContext 생성: listFiles 1회 + meta 1회
+    const result = await createSyncContextFromDb(db);
+    if (!result) {
+      return { vocabPulled: 0, vocabPushed: 0, fsrsPulled: false };
+    }
+    const { ctx } = result;
 
-  // push dirty partitions (ctx 공유)
-  let vocabPushed = 0;
-  if (dirtyVocabDates.size > 0) {
-    const dates = [...dirtyVocabDates];
-    vocabPushed = await pushToDrive(db, dates, ctx);
-    dirtyVocabDates.clear();
-  }
-  if (dirtyFsrsVocabIds.size > 0) {
-    const ids = [...dirtyFsrsVocabIds];
-    await pushFsrsPartitions(db, ids, ctx);
-    dirtyFsrsVocabIds.clear();
-  }
-  if (dirtyReviewMonths.size > 0) {
-    const months = [...dirtyReviewMonths];
-    await pushReviewLogPartitions(db, months, ctx);
-    dirtyReviewMonths.clear();
-  }
+    // 3종 pull 병렬
+    const [vocabResult, fsrsPulled] = await Promise.all([
+      pullFromDrive(db, ctx),
+      pullFsrsPartitions(db, ctx),
+      pullReviewLogPartitions(db, ctx),
+    ]);
 
-  // 재읽기 + 머지 + 1회 쓰기
-  await commitSyncMeta(ctx);
+    // push dirty partitions (ctx 공유)
+    let vocabPushed = 0;
+    if (dirtyVocabDates.size > 0) {
+      const dates = [...dirtyVocabDates];
+      vocabPushed = await pushToDrive(db, dates, ctx);
+      dirtyVocabDates.clear();
+    }
+    if (dirtyFsrsVocabIds.size > 0) {
+      const ids = [...dirtyFsrsVocabIds];
+      await pushFsrsPartitions(db, ids, ctx);
+      dirtyFsrsVocabIds.clear();
+    }
+    if (dirtyReviewMonths.size > 0) {
+      const months = [...dirtyReviewMonths];
+      await pushReviewLogPartitions(db, months, ctx);
+      dirtyReviewMonths.clear();
+    }
 
-  return { vocabPulled: vocabResult.pulled, vocabPushed, fsrsPulled };
+    // 재읽기 + 머지 + 1회 쓰기
+    await commitSyncMeta(ctx);
+
+    return { vocabPulled: vocabResult.pulled, vocabPushed, fsrsPulled };
+  } finally {
+    isPulling = false;
+  }
 }
 
 async function handleAppStateChange(nextState: string) {
@@ -128,6 +136,8 @@ async function handleAppStateChange(nextState: string) {
   if (nextState === 'background' || nextState === 'inactive') {
     await flush();
   } else if (nextState === 'active') {
+    if (isPulling) return;
+    isPulling = true;
     try {
       // SyncContext 생성 → 3종 pull 병렬
       const result = await createSyncContextFromDb(database);
@@ -140,6 +150,15 @@ async function handleAppStateChange(nextState: string) {
         pullReviewLogPartitions(database, ctx),
       ]);
 
+      // pull에서 발견된 versionPatches를 Drive meta에 반영
+      const hasPatches =
+        Object.keys(ctx.versionPatches.partitionVersions).length > 0 ||
+        Object.keys(ctx.versionPatches.fsrsPartitionVersions).length > 0 ||
+        Object.keys(ctx.versionPatches.reviewPartitionVersions).length > 0;
+      if (hasPatches) {
+        await commitSyncMeta(ctx);
+      }
+
       if (vocabResult.changed) {
         await useVocabStore.getState().refresh(database);
       }
@@ -149,6 +168,8 @@ async function handleAppStateChange(nextState: string) {
       await setSyncMeta(database, 'lastSyncTime', String(now));
     } catch {
       // 포그라운드 pull 실패 — 무시
+    } finally {
+      isPulling = false;
     }
   }
 }
@@ -159,6 +180,8 @@ export function initSyncManager(db: SQLiteDatabase) {
 
   // cold start 시 자동 pull
   (async () => {
+    if (isPulling) return;
+    isPulling = true;
     try {
       const result = await createSyncContextFromDb(db);
       if (!result) return;
@@ -170,6 +193,15 @@ export function initSyncManager(db: SQLiteDatabase) {
         pullReviewLogPartitions(db, ctx),
       ]);
 
+      // pull에서 발견된 versionPatches를 Drive meta에 반영
+      const hasPatches =
+        Object.keys(ctx.versionPatches.partitionVersions).length > 0 ||
+        Object.keys(ctx.versionPatches.fsrsPartitionVersions).length > 0 ||
+        Object.keys(ctx.versionPatches.reviewPartitionVersions).length > 0;
+      if (hasPatches) {
+        await commitSyncMeta(ctx);
+      }
+
       if (vocabResult.changed) {
         await useVocabStore.getState().refresh(db);
       }
@@ -179,6 +211,8 @@ export function initSyncManager(db: SQLiteDatabase) {
       await setSyncMeta(db, 'lastSyncTime', String(now));
     } catch {
       // cold start pull 실패 — 무시
+    } finally {
+      isPulling = false;
     }
   })();
 }
@@ -195,4 +229,5 @@ export function destroySyncManager() {
   dirtyReviewMonths.clear();
   dirtyVocabDates.clear();
   isFlushing = false;
+  isPulling = false;
 }

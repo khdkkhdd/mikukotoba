@@ -103,14 +103,28 @@ export async function pullFromDrive(database: SQLiteDatabase, ctx?: SyncContext,
 
   // Merge all remote partitions that are newer (skip invalid date keys)
   const isValidDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
-  const allDates = Object.keys(remoteMeta.partitionVersions).filter(isValidDate);
+  const allDates = new Set(Object.keys(remoteMeta.partitionVersions).filter(isValidDate));
 
-  // dirty 날짜만 필터
-  const dirtyDates = allDates.filter(date => {
+  // ctx.fileIdMap에서 vocab_ 파일 발견 → metadata 누락된 고아 파일도 포함
+  if (ctx) {
+    for (const fileName of Object.keys(ctx.fileIdMap)) {
+      const match = fileName.match(/^vocab_(\d{4}-\d{2}-\d{2})\.json$/);
+      if (match) allDates.add(match[1]);
+    }
+  }
+
+  // dirty 날짜 (remoteVersion > localVersion) + init 날짜 (양쪽 0, Drive에 파일 존재)
+  const dirtyDates: string[] = [];
+  const initDates: string[] = [];
+  for (const date of allDates) {
     const localVersion = meta.partitionVersions[date] || 0;
     const remoteVersion = remoteMeta!.partitionVersions[date] || 0;
-    return remoteVersion > localVersion;
-  });
+    if (remoteVersion > localVersion) {
+      dirtyDates.push(date);
+    } else if (localVersion === 0 && remoteVersion === 0) {
+      initDates.push(date);
+    }
+  }
 
   // 파티션 fetch 병렬화
   const fetchResults = await parallelMap(dirtyDates, async (date) => {
@@ -140,6 +154,43 @@ export async function pullFromDrive(database: SQLiteDatabase, ctx?: SyncContext,
       if (partitionChanges > 0) changed = true;
     } catch (e) {
       console.error('[SYNC] failed to pull partition', date, e);
+    }
+  }
+
+  // initDates: metadata에 없지만 Drive에 파일만 있는 고아 파일 pull
+  if (initDates.length > 0) {
+    const initResults = await parallelMap(initDates, async (date) => {
+      const fileName = drivePartitionName(date);
+      const fileId = ctx
+        ? resolveFileId(ctx.fileIdMap, ctx.localDriveFileIds, fileName)
+        : await ensureDriveFileId(token, meta, fileName);
+      if (!fileId) return null;
+
+      const remote = await DriveAPI.getFile<DrivePartitionContent>(token, fileId);
+      return { date, remote };
+    });
+
+    for (const result of initResults) {
+      if (result.status !== 'fulfilled' || !result.value) continue;
+      const { date, remote } = result.value;
+
+      try {
+        const localEntries = await db.getEntriesByDate(database, date);
+        const currentTombstones = await db.getTombstones(database);
+        const merged = mergeEntries(remote.entries, localEntries, currentTombstones);
+        const partitionChanges = countChangedEntries(localEntries, merged);
+        if (partitionChanges > 0) {
+          await db.upsertEntries(database, merged);
+          meta.partitionVersions[date] = remote.version || Date.now();
+          pulled += partitionChanges;
+          changed = true;
+          if (ctx) {
+            ctx.versionPatches.partitionVersions[date] = meta.partitionVersions[date];
+          }
+        }
+      } catch (e) {
+        console.error('[SYNC] failed to pull orphaned partition', date, e);
+      }
     }
   }
 
@@ -217,7 +268,7 @@ export async function pushToDrive(database: SQLiteDatabase, dates: string[], ctx
     return pushed;
   }
 
-  // ctx 미사용 (레거시 경로) → 기존 방식으로 meta 업데이트
+  // ctx 미사용 (경량 경로: flush에서 호출) → 개별 meta 업데이트
   const metaFileId = await ensureDriveFileId(token, meta, DRIVE_META_FILE);
   let remoteVersions: Record<string, number> = {};
   let remoteDeleted: Record<string, number> = {};
@@ -242,6 +293,9 @@ export async function pushToDrive(database: SQLiteDatabase, dates: string[], ctx
   }
   meta.partitionVersions = mergedVersions;
 
+  // 로컬 meta 먼저 저장 — Drive write 실패해도 다음 sync에서 재시도
+  await saveLocalSyncMeta(database, meta);
+
   const remoteSyncMeta: DriveSyncMeta = {
     partitionVersions: mergedVersions,
     deletedEntries: cleanTombstones({ ...remoteDeleted, ...tombstones }),
@@ -249,14 +303,18 @@ export async function pushToDrive(database: SQLiteDatabase, dates: string[], ctx
     reviewPartitionVersions: remoteReviewPartitionVersions,
   };
 
-  if (metaFileId) {
-    await DriveAPI.updateFile(token, metaFileId, remoteSyncMeta);
-  } else {
-    const newId = await DriveAPI.createFile(token, DRIVE_META_FILE, remoteSyncMeta);
-    meta.driveFileIds[DRIVE_META_FILE] = newId;
+  try {
+    if (metaFileId) {
+      await DriveAPI.updateFile(token, metaFileId, remoteSyncMeta);
+    } else {
+      const newId = await DriveAPI.createFile(token, DRIVE_META_FILE, remoteSyncMeta);
+      meta.driveFileIds[DRIVE_META_FILE] = newId;
+      await saveLocalSyncMeta(database, meta);
+    }
+  } catch (e) {
+    console.error('[SYNC] pushToDrive: Drive meta write failed, will retry next sync:', e);
   }
 
-  await saveLocalSyncMeta(database, meta);
   return pushed;
 }
 
@@ -524,13 +582,18 @@ export async function pushFsrsPartitions(database: SQLiteDatabase, dirtyVocabIds
     }
   }
 
-  if (!ctx) {
-    // 레거시 경로: 개별 meta 업데이트
-    await updateRemoteMeta(token, meta, { fsrsPartitionVersions: localVersions });
-  }
-
+  // 로컬 먼저 저장 — Drive write 실패해도 다음 sync에서 재시도
   await saveLocalFsrsPartitionVersions(database, localVersions);
   await saveLocalSyncMeta(database, meta);
+
+  if (!ctx) {
+    try {
+      await updateRemoteMeta(token, meta, { fsrsPartitionVersions: localVersions });
+      await saveLocalSyncMeta(database, meta);
+    } catch (e) {
+      console.error('[SYNC] pushFsrsPartitions: Drive meta write failed, will retry next sync:', e);
+    }
+  }
 }
 
 // --- 리뷰 로그 파티션 동기화 ---
@@ -691,16 +754,21 @@ export async function pushReviewLogPartitions(database: SQLiteDatabase, dirtyMon
     }
   }
 
-  if (!ctx) {
-    // 레거시 경로: 개별 meta 업데이트
-    await updateRemoteMeta(token, meta, { reviewPartitionVersions: localVersions });
-  }
-
+  // 로컬 먼저 저장 — Drive write 실패해도 다음 sync에서 재시도
   await saveLocalReviewPartitionVersions(database, localVersions);
   await saveLocalSyncMeta(database, meta);
+
+  if (!ctx) {
+    try {
+      await updateRemoteMeta(token, meta, { reviewPartitionVersions: localVersions });
+      await saveLocalSyncMeta(database, meta);
+    } catch (e) {
+      console.error('[SYNC] pushReviewLogPartitions: Drive meta write failed, will retry next sync:', e);
+    }
+  }
 }
 
-// --- 공용 헬퍼: DriveSyncMeta 업데이트 (레거시 경로용) ---
+// --- 공용 헬퍼: DriveSyncMeta 업데이트 (경량 경로용, ctx 미사용 시) ---
 
 async function updateRemoteMeta(
   token: string,

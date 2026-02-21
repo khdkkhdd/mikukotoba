@@ -141,26 +141,34 @@ export class UserHandler {
     if (nameArea) {
       const nameText = nameArea.innerText?.trim();
       if (nameText && isJapaneseShortText(nameText)) {
-        this.hoverTargets.add(nameArea);
-        nameArea.setAttribute('data-jp-hover', 'name');
+        if (this.settings.showFurigana) {
+          await this.processHoverWithFurigana(nameArea, nameText);
+        } else {
+          this.hoverTargets.add(nameArea);
+          nameArea.setAttribute('data-jp-hover', 'name');
+        }
       }
     }
 
-    // Find bio text within the cell (usually the last text-heavy div)
+    // Find bio text within the cell.
+    // Bio divs use dir="auto" attribute, which distinguishes them from
+    // name/handle areas (dir="ltr") and hidden aria descriptions (display:none → empty innerText).
     const mode = this.settings.webpageMode;
     if (mode === 'off') return;
 
-    const allDivs = element.querySelectorAll<HTMLElement>(':scope > div > div');
-    for (const div of allDivs) {
+    const bioCandidates = element.querySelectorAll<HTMLElement>('div[dir="auto"]');
+    for (const div of bioCandidates) {
       const text = div.innerText?.trim();
       if (!text || text.length < 5) continue;
-      if (div.querySelector('a[role="link"]')) continue;
-      if (div.querySelector('button')) continue;
 
       if (isJapaneseText(div)) {
         if (mode === 'hover') {
-          this.hoverTargets.add(div);
-          div.classList.add('jp-twitter-hover-target');
+          if (this.settings.showFurigana) {
+            await this.processHoverWithFurigana(div, text);
+          } else {
+            this.hoverTargets.add(div);
+            div.classList.add('jp-twitter-hover-target');
+          }
         } else {
           markProcessed(div);
           try {

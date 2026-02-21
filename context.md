@@ -1,56 +1,66 @@
 # Goal
 
-Drive Sync 안정성 개선: vocab 파일 push 성공 후 metadata write 실패 시 고아 파일 발생 → 새 기기에서 pull 불가 버그 해결. Extension + Mobile 양쪽 동일 패턴 수정.
+트위터 팔로우 추천 페이지(`/i/connect_people`)와 사이드바 팔로우 추천 영역에서 후리가나 및 번역이 정상 동작하도록 수정. 추가로, @멘션이 포함된 바이오의 ruby clone에서 줄바꿈이 발생하는 레이아웃 버그 해결.
 
 # Research
 
-## 근본 원인
+## UserCell DOM 구조 (팔로우 추천)
 
-- `pushPartitionImmediate` (Extension) / `pushToDrive` (Mobile): vocab 파일을 Drive에 성공적으로 write한 뒤, metadata write(`Promise.all` 또는 `updateRemoteMeta`)가 실패하면 로컬 meta도 저장되지 않아 버전 정보 유실
-- 다음 sync에서 해당 파일의 localVersion/remoteVersion 모두 0 → dirty로 감지 안 됨 → 고아 파일 발생
-- Mobile pull에서는 `remoteMeta.partitionVersions`만 참조하므로 metadata에 없는 파일 발견 불가
+### 추천 페이지 (`/i/connect_people`)
+- `<button data-testid="UserCell">` 안에 이름, 핸들, 팔로우 버튼, 바이오 포함
+- 소셜 컨텍스트("XX님이 팔로우합니다")가 있는 셀은 추가 래퍼 div 존재
+- 바이오: `<div dir="auto" style="overflow: hidden">` — 깊이가 유동적 (`:scope > div > div`로 도달 불가)
+- 이름/핸들: `dir="ltr"` 사용, 숨겨진 aria 설명: `display:none` (빈 innerText)
 
-## Sync 경로 구조
+### 사이드바 팔로우 추천
+- `<li data-testid="UserCell">` (페이지와 다르게 `<li>` 사용)
+- 바이오 텍스트 없음 — 이름 + 핸들 + 팔로우 버튼만 표시
+- 이름만 후리가나/호버 대상
 
-- **ctx 경로** (`fullSync`): `createSyncContext` → `listFiles` 1회로 `fileIdMap` 구성 → pull/push에 ctx 전달 → `commitSyncMeta`로 일괄 meta 업데이트
-- **경량 경로** (`flush`, debounce 30초): ctx 없이 push 함수 직접 호출 → 각 함수가 `updateRemoteMeta`로 개별 meta 업데이트. `listFiles` 호출 안 함
-- 둘 다 활성 경로. "레거시"가 아님
+## 기존 코드 문제점
 
-## 검증 완료 사항
+1. **바이오 셀렉터 미스매치**: `:scope > div > div`가 실제 DOM 깊이와 불일치
+2. **링크 필터 오탐**: 바이오 div에 `a[role="link"]`(@멘션)가 포함되어 통째로 스킵
+3. **소셜 컨텍스트 오탐**: "ウオン님이 팔로우합니다"의 카타카나가 일본어로 감지 → break로 바이오 미처리
+4. **이름 후리가나 미지원**: hover target만 등록, `processHoverWithFurigana` 미호출
+5. **바이오 hover+furigana 미지원**: hover 모드에서 furigana 없이 hover target만 등록
 
-- 로컬 meta 조기 저장 → Drive 실패 시 `localV > remoteV`로 다음 sync에서 재시도됨
-- `mergeEntries`가 tombstone 필터링 → 삭제 항목 부활 없음
-- `commitSyncMeta`: freshMeta 재읽기 + Math.max 머지 → 버전 역행 방지
-- `isPulling` 가드: cold start, foreground 복귀, fullSync 세 경로 간 동시 실행 방지
-- `pullFromDrive`는 실제로 항상 ctx와 함께 호출됨 (fullSync, foreground, cold start 모두)
+## @멘션 래퍼 줄바꿈 (미해결)
+
+- 트위터 @멘션은 `<div class="css-175oi2r r-xoduu5"><span><a>` 구조
+- `createRubyClone`이 `innerHTML`을 복사하면 래퍼 div가 block으로 렌더링 → 줄바꿈 발생
+- 시도 1: `getComputedStyle`로 원본 display 복사 → 실패
+- 시도 2: 클론 내 모든 div에 `display: inline` 강제 → 실패
+- 원인 미확정. 실제 DOM에서 직접 디버깅 필요
 
 # Plan
 
 ## Decisions
 
-- FSRS/ReviewLog 파티션도 동일 패턴 적용 (vocab만이 아닌 전체 push 경로 보호)
-- `isPulling` 가드를 sync-manager에 추가하여 동시 pull 방지 (기존 `isFlushing`은 flush만 보호)
-- Extension/Mobile initDates 전략 차이 유지: Extension은 merge 후 push back, Mobile은 pull only (dirtyVocabDates로 다음 flush 때 push)
+- 바이오 셀렉터: `div[dir="auto"]` 사용 — DOM 깊이 무관, dir 속성으로 바이오/이름/aria 구분
+- 이름 후리가나: `showFurigana` 시 `processHoverWithFurigana()` 호출 (hover+furigana 동시 동작)
+- 바이오 hover+furigana: `processUserDescription`과 동일 패턴 적용
+- @멘션 줄바꿈: 되돌림. 브라우저에서 직접 디버깅 후 재시도 필요
 
 ## Steps
 
-구현 완료. 커밋 대기.
+- [x] 바이오 셀렉터 수정 (`:scope > div > div` → `div[dir="auto"]`)
+- [x] 바이오 hover 모드에서 `processHoverWithFurigana` 호출
+- [x] 이름에 `processHoverWithFurigana` 적용
+- [ ] @멘션 래퍼 줄바꿈 디버깅 및 수정 (보류)
+- [ ] 커밋
 
 # Progress
 
 ## 완료
 
-- A. Extension `pushPartitionImmediate`: `saveLocalMeta`를 Drive write 앞으로 이동, `Promise.all` try-catch
-- B. Mobile `pullFromDrive`: `ctx.fileIdMap`에서 vocab 파일 발견 + initDates 고아 파일 pull
-- C. Mobile `pushToDrive` 경량 경로: `saveLocalSyncMeta`를 Drive write 앞으로 이동, try-catch
-- D. Mobile sync-manager: `handleAppStateChange(active)` + `initSyncManager`에서 pull 후 `commitSyncMeta` 호출
-- E. Mobile `pushFsrsPartitions`/`pushReviewLogPartitions` 경량 경로: 동일 패턴 적용
-- F. Mobile sync-manager `isPulling` 가드 추가
-- G. 주석 정리: "레거시 경로" → "경량 경로"
-- 전체 점검 완료 (Extension build + Mobile tsc 통과)
+- `user-handler.ts`: `processUserCell` 바이오 셀렉터 + 이름/바이오 후리가나 처리 수정
+- 빌드 통과
+
+## 보류
+
+- `ruby-injector.ts` @멘션 div 줄바꿈 — 두 차례 시도 실패, 변경 되돌림. 브라우저 직접 디버깅 필요
 
 ## 변경 파일
 
-- `packages/extension/src/core/drive-sync.ts`
-- `packages/mobile/src/services/sync.ts`
-- `packages/mobile/src/services/sync-manager.ts`
+- `packages/extension/src/content/twitter/user-handler.ts`

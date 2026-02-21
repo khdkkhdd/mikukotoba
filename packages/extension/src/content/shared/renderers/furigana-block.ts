@@ -1,5 +1,7 @@
 import type { TranslationResult, UserSettings } from '@/types';
 import { tokensToFuriganaHTML } from '@/core/analyzer/reading-converter';
+import { getTextWithoutRuby } from '@/content/shared/dom-utils';
+import type { WordClickCallback } from './ruby-injector';
 
 export interface FuriganaBlockOptions {
   /** Container CSS class */
@@ -8,6 +10,8 @@ export interface FuriganaBlockOptions {
   translationAttr?: string;
   /** Class prefix for child elements */
   classPrefix?: string;
+  /** Callback for word click → vocab modal */
+  onWordClick?: WordClickCallback;
 }
 
 /**
@@ -39,6 +43,7 @@ export function createStyledFuriganaBlock(
   div.style.letterSpacing = cs.letterSpacing;
 
   div.innerHTML = tokensToFuriganaHTML(result.tokens);
+  attachWordClickHandlers(div, opts?.onWordClick);
   return div;
 }
 
@@ -62,9 +67,29 @@ export function createFuriganaBlock(
   const furiganaDiv = document.createElement('div');
   furiganaDiv.className = `${prefix}-furigana`;
   furiganaDiv.innerHTML = tokensToFuriganaHTML(result.tokens);
+  attachWordClickHandlers(furiganaDiv, opts?.onWordClick);
   div.appendChild(furiganaDiv);
 
   return div;
+}
+
+/** Attach word click handlers to ruby elements inside a container. */
+function attachWordClickHandlers(container: HTMLElement, onWordClick?: WordClickCallback): void {
+  if (!onWordClick) return;
+  const rubies = container.querySelectorAll('ruby');
+  for (const ruby of rubies) {
+    ruby.style.cursor = 'pointer';
+    ruby.classList.add('jp-vocab-clickable');
+    ruby.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const surface = ruby.firstChild?.textContent || '';
+      const rt = ruby.querySelector('rt');
+      const reading = rt?.textContent || '';
+      const sentence = getTextWithoutRuby(container);
+      onWordClick(surface, reading, sentence);
+    });
+  }
 }
 
 /**

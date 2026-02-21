@@ -28,6 +28,7 @@ export const YT_SELECTOR_DEFS: YTSelectorDef[] = [
   { key: 'hashtag', selector: 'ytd-watch-metadata #super-title a', category: 'label', deferToViewport: false },
   { key: 'compactVideoTitle', selector: 'ytd-compact-video-renderer #video-title', category: 'label', deferToViewport: true },
   { key: 'chapterTitle', selector: 'ytd-macro-markers-list-item-renderer #details h4', category: 'label', deferToViewport: true },
+  { key: 'playlistPanelVideo', selector: 'ytd-playlist-panel-video-renderer #video-title', category: 'label', deferToViewport: true },
 
   // Feed (Home/Subscriptions/Trending)
   { key: 'feedVideoTitle', selector: 'ytd-rich-grid-media #video-title-link yt-formatted-string', category: 'label', deferToViewport: true },
@@ -52,6 +53,7 @@ export const YT_SELECTOR_DEFS: YTSelectorDef[] = [
   { key: 'communityPost', selector: 'ytd-backstage-post-thread-renderer #content-text', category: 'rich', deferToViewport: true },
   { key: 'pollOption', selector: 'ytd-backstage-poll-renderer #vote-text', category: 'label', deferToViewport: true },
   { key: 'channelPlaylistTitle', selector: 'ytd-grid-playlist-renderer #video-title yt-formatted-string', category: 'label', deferToViewport: true },
+  { key: 'channelVideoTitle', selector: 'ytd-grid-video-renderer #video-title', category: 'label', deferToViewport: true },
 
   // Playlist
   { key: 'playlistTitle', selector: 'ytd-playlist-header-renderer #title yt-formatted-string', category: 'main', deferToViewport: false },

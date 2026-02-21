@@ -18,7 +18,12 @@ export function createRubyClone(
   tokens: MorphemeToken[],
   opts?: { translationAttr?: string; className?: string; onWordClick?: WordClickCallback },
 ): HTMLElement {
-  const clone = element.cloneNode(true) as HTMLElement;
+  // Use a plain <div> instead of cloning the element directly.
+  // Custom elements (YouTube's yt-formatted-string, etc.) may not render
+  // their light DOM children in a clone because Polymer/Lit lifecycle hooks
+  // don't run for cloned nodes. A <div> reliably renders all children.
+  const clone = document.createElement('div');
+  clone.innerHTML = element.innerHTML;
 
   if (opts?.translationAttr) {
     clone.setAttribute(opts.translationAttr, 'true');
@@ -28,23 +33,21 @@ export function createRubyClone(
   }
   clone.classList.add('jp-ruby-annotated');
 
-  // Remove id from clone to avoid duplicate IDs in the DOM
-  clone.removeAttribute('id');
-
-  // Remove data-testid from clone and descendants so MutationObservers
+  // Remove data-testid from descendants so MutationObservers
   // (e.g. TwitterObserver.queryAndRoute) don't re-detect the clone as
   // a content element and reprocess it — which would cause double ruby.
-  clone.removeAttribute('data-testid');
   clone.querySelectorAll('[data-testid]').forEach(el => el.removeAttribute('data-testid'));
 
-  // Copy computed font-size from the original element.
-  // The clone may be inserted outside its original CSS scope (e.g. YouTube
-  // Polymer removes #content-text matching after id removal), causing it to
-  // inherit a wrong base font-size. Inline style ensures visual fidelity.
-  const computedFontSize = window.getComputedStyle(element).fontSize;
-  if (computedFontSize) {
-    clone.style.fontSize = computedFontSize;
-  }
+  // Copy computed styles from the original element.
+  // The clone lives outside its original CSS scope, so inline styles
+  // ensure visual fidelity.
+  const cs = window.getComputedStyle(element);
+  clone.style.fontSize = cs.fontSize;
+  clone.style.lineHeight = cs.lineHeight;
+  clone.style.color = cs.color;
+  clone.style.whiteSpace = cs.whiteSpace;
+  clone.style.letterSpacing = cs.letterSpacing;
+  clone.style.wordBreak = cs.wordBreak;
 
   const hasKanji = tokens.some(t => t.isKanji && t.reading !== t.surface);
   if (!hasKanji) return clone;

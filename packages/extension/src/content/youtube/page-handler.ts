@@ -289,8 +289,8 @@ export class YouTubePageHandler implements SiteHandler {
       if (!el.isConnected) { this.status?.translated(); return; }
       if (el.innerText?.trim() !== text) { this.status?.translated(); return; } // text changed during translation
 
-      // Split furigana into a separate styled block for main elements
-      const shouldSplitFurigana = category === 'main' &&
+      // Split furigana into a separate styled block for main/label elements
+      const shouldSplitFurigana = (category === 'main' || category === 'label') &&
         (mode === 'furigana-only' || (mode === 'inline' && this.settings.showFurigana));
 
       if (shouldSplitFurigana) {
@@ -300,6 +300,7 @@ export class YouTubePageHandler implements SiteHandler {
         const furigana = createStyledFuriganaBlock(result, el, {
           classPrefix: 'jp-yt',
           translationAttr: YT_TRANSLATION_ATTR,
+          onWordClick,
         });
         anchor.insertAdjacentElement('afterend', furigana);
         this.tracker.trackInjected(furigana);
@@ -307,15 +308,17 @@ export class YouTubePageHandler implements SiteHandler {
 
         // inline mode: add translation block after furigana
         if (mode === 'inline') {
-          const translationBlock = createInlineBlock(result, this.settings, {
-            className: 'jp-yt-translation',
-            translationAttr: YT_TRANSLATION_ATTR,
-            classPrefix: 'jp-yt',
-            spoiler: true,
-            skipFurigana: true,
-            onRetranslate: () => translator.retranslate(text),
-            onWordClick,
-          });
+          const translationBlock = category === 'main'
+            ? createInlineBlock(result, this.settings, {
+                className: 'jp-yt-translation',
+                translationAttr: YT_TRANSLATION_ATTR,
+                classPrefix: 'jp-yt',
+                spoiler: true,
+                skipFurigana: true,
+                onRetranslate: () => translator.retranslate(text),
+                onWordClick,
+              })
+            : this.createLabelBlock(result.korean, 'translation');
           furigana.insertAdjacentElement('afterend', translationBlock);
           this.tracker.trackInjected(translationBlock);
         }
@@ -419,7 +422,7 @@ export class YouTubePageHandler implements SiteHandler {
           const furiganaBlock = createStyledFuriganaBlock(
             { tokens } as TranslationResult,
             el,
-            { classPrefix: 'jp-yt', translationAttr: YT_TRANSLATION_ATTR },
+            { classPrefix: 'jp-yt', translationAttr: YT_TRANSLATION_ATTR, onWordClick },
           );
           anchor.insertAdjacentElement('afterend', furiganaBlock);
           this.tracker.trackInjected(furiganaBlock);
@@ -538,6 +541,14 @@ export class YouTubePageHandler implements SiteHandler {
     // Search/playlist title: yt-formatted-string → insert after <a#video-title>
     const videoTitleLink = el.closest('a#video-title');
     if (videoTitleLink) return videoTitleLink as HTMLElement;
+
+    // Community post: in inline/furigana-only modes, insert after the element
+    // itself so the clone stays inside the same container alongside translation
+    // blocks. In hover mode, fall through to the expander case so the clone
+    // goes outside the expander — prevents expander collapse when the original
+    // #content-text is hidden with jp-furigana-hidden.
+    const backstagePost = el.closest('ytd-backstage-post-thread-renderer');
+    if (backstagePost && this.settings.webpageMode !== 'hover') return el;
 
     // Comment text: #content-text is inside ytd-expander > #content div
     // which has overflow:hidden + -webkit-line-clamp when collapsed.

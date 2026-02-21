@@ -170,12 +170,6 @@ html[dark] .jp-yt-desc-translations {
 /* ──── Hover mode indicator ──── */
 .jp-yt-hover-target {
   cursor: help;
-  text-decoration: underline dotted rgba(0, 0, 0, 0.15);
-  text-underline-offset: 2px;
-}
-
-html[dark] .jp-yt-hover-target {
-  text-decoration-color: rgba(255, 255, 255, 0.15);
 }
 
 /* ──── Furigana-only block ──── */

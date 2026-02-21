@@ -71,10 +71,12 @@ async function exportAll(): Promise<VocabEntry[]> {
 // ──────────────── Rendering ────────────────
 
 function escapeHtml(text: string): string {
+  if (!text) return '';
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function highlightMatch(text: string, query: string): string {
+  if (!text) return '';
   if (!query) return escapeHtml(text);
   const escaped = escapeHtml(text);
   const q = escapeHtml(query);

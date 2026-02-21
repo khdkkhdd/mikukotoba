@@ -547,10 +547,12 @@ async function rebuildLocalIndex(): Promise<void> {
   const allData = await chrome.storage.local.get(null);
   const dates: string[] = [];
   let totalCount = 0;
+  const isValidDate = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
 
   for (const [key, value] of Object.entries(allData)) {
     if (key.startsWith(VOCAB_PREFIX) && key !== VOCAB_INDEX_KEY && key !== SEARCH_INDEX_KEY) {
       const date = key.slice(VOCAB_PREFIX.length);
+      if (!isValidDate(date)) continue;
       const entries = value as VocabEntry[];
       if (entries.length > 0) {
         dates.push(date);

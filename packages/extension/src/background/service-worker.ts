@@ -518,6 +518,13 @@ chrome.runtime.onInstalled.addListener(async () => {
 
   // Rebuild search index for existing vocab data (migration)
   VocabStorage.rebuildSearchIndex().catch(() => {});
+
+  // Re-inject content scripts into all http tabs (old scripts are dead after update/reload)
+  chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] }).then(tabs => {
+    for (const tab of tabs) {
+      if (tab.id) pingAndReinject(tab.id);
+    }
+  });
 });
 
 /**

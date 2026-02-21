@@ -333,6 +333,7 @@ export class YouTubePageHandler implements SiteHandler {
       }
       this.status?.translated();
     } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       log.warn('Translation failed:', text.slice(0, 30), e);
       this.status?.failed();
       this.tracker.unmarkProcessed(el);
@@ -763,6 +764,7 @@ export class YouTubePageHandler implements SiteHandler {
       this.tracker.trackInjected(container);
       this.status?.translated();
     } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       log.warn('Rich content translation failed:', e);
       this.status?.failed();
       this.tracker.unmarkProcessed(el);

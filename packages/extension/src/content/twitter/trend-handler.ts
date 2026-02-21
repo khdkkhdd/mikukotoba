@@ -72,6 +72,7 @@ export class TrendHandler {
 
       log.debug('Trend translated:', text.slice(0, 20));
     } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       log.warn('Trend translation failed:', text.slice(0, 20), e);
       this.status?.failed();
       this.tracker.unmarkProcessed(element);

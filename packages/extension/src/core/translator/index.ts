@@ -268,6 +268,8 @@ export class Translator {
         korean = await llmClient.translate(workText, context, this.settings?.learningLevel);
         engine = this.activePlatform;
       } catch (err) {
+        // Context invalidated: re-throw immediately (no fallback, no log)
+        if (err instanceof Error && err.name === 'ContextInvalidated') throw err;
         log.warn(`FAIL [${this.activePlatform}]:`, shortText, err);
         // Fallback to Papago
         if (this.papago.isConfigured()) {
@@ -284,6 +286,8 @@ export class Translator {
         korean = await this.papago.translate(workText);
         engine = 'papago';
       } catch (err) {
+        // Context invalidated: re-throw immediately (no fallback, no log)
+        if (err instanceof Error && err.name === 'ContextInvalidated') throw err;
         log.warn('FAIL [papago]:', shortText, err);
         // Fallback to LLM if available
         if (llmClient.isConfigured()) {

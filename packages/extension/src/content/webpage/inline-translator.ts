@@ -79,7 +79,8 @@ export class InlineTranslator {
       }
 
       this.status?.translated();
-    } catch {
+    } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       // Allow retry: remove from processed set so it can be re-detected
       this.tracker.unmarkProcessed(block.element);
       this.status?.failed();

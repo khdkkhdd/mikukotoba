@@ -112,6 +112,7 @@ export class TweetHandler {
       this.status?.translated();
       log.info('Translation block inserted');
     } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       log.error('Tweet translation FAILED:', e);
       this.status?.failed();
       this.tracker.unmarkProcessed(element);
@@ -169,6 +170,7 @@ export class TweetHandler {
       this.registerHoverTarget(clone, text);
       this.status?.translated();
     } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       log.error('Hover+furigana failed:', e);
       this.status?.failed();
       this.tracker.unmarkProcessed(element);
@@ -209,6 +211,7 @@ export class TweetHandler {
       this.status?.translated();
       log.debug('Card translated:', textToTranslate.slice(0, 30));
     } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       log.warn('Card translation failed:', e);
       this.status?.failed();
       this.tracker.unmarkProcessed(element);

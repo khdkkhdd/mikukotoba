@@ -341,6 +341,7 @@ async function handleVocabAdd(text: string): Promise<void> {
       await chrome.runtime.sendMessage({ type: 'VOCAB_SAVE', payload: entry });
     });
   } catch (e) {
+    if (e instanceof Error && e.name === 'ContextInvalidated') { removeVocabModal(); return; }
     log.error('Vocab add failed:', e);
     removeVocabModal();
   }
@@ -350,6 +351,9 @@ async function handleVocabAdd(text: string): Promise<void> {
 
 let contextInvalidated = false;
 
+/** Sentinel error name — translator uses this to skip fallback/logging */
+const CONTEXT_INVALIDATED = 'ContextInvalidated';
+
 function checkContext(): void {
   if (!chrome.runtime?.id) {
     if (!contextInvalidated) {
@@ -357,7 +361,9 @@ function checkContext(): void {
       cleanupAll();
       log.warn('Extension context invalidated — reload page to reconnect');
     }
-    throw new Error('Extension context invalidated');
+    const err = new Error('Extension context invalidated');
+    err.name = CONTEXT_INVALIDATED;
+    throw err;
   }
 }
 

@@ -108,6 +108,7 @@ export class UserHandler {
       this.status?.translated();
       log.debug('Bio translated:', text.slice(0, 30));
     } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       log.warn('Bio translation failed:', e);
       this.status?.failed();
       this.tracker.unmarkProcessed(element);
@@ -256,6 +257,7 @@ export class UserHandler {
       clone.setAttribute('data-jp-hover-text', text);
       this.status?.translated();
     } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       log.error('Hover+furigana failed:', e);
       this.status?.failed();
       this.tracker.unmarkProcessed(element);

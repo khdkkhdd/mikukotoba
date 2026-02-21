@@ -102,6 +102,7 @@ export class YouTubeSubtitleHandler implements SiteHandler {
       log.debug('Subtitle translated:', shortText, `engine=${result.engine}`, `${Date.now() - t0}ms`);
       this.subtitleOverlay?.show(result);
     } catch (e) {
+      if (e instanceof Error && e.name === 'ContextInvalidated') return;
       log.error('Translation error:', shortText, `${Date.now() - t0}ms`, e);
     }
   }

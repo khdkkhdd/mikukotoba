@@ -1,0 +1,19 @@
+[
+  {
+    "pattern": ["一", "人"],
+    "readings": ["ひと", "り"],
+    "whenReadings": ["いち", "にん"],
+    "note": "ひとり"
+  },
+  {
+    "pattern": ["二", "人"],
+    "readings": ["ふた", "り"],
+    "whenReadings": ["に", "にん"],
+    "note": "ふたり"
+  },
+  {
+    "pattern": ["音", "ノ", "乃"],
+    "readings": ["の", "の", "の"],
+    "note": "音ノ乃 (nonono)"
+  }
+]

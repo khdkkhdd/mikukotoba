@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite build --watch --mode development",
     "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -20,7 +21,9 @@
     "@crxjs/vite-plugin": "^2.0.0-beta.28",
     "@playwright/test": "^1.58.2",
     "@types/chrome": "^0.0.287",
+    "mecab-ipadic-seed": "^0.0.2",
     "typescript": "^5.7.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.0.18"
   }
 }

@@ -148,12 +148,10 @@ function updateInlinePreview(): void {
 // ──────────────── Glossary ────────────────
 
 async function loadGlossary(): Promise<void> {
-  // Built-in glossary
+  // Example glossary entries (display only, not used in translation)
   const builtInContainer = document.getElementById('builtInGlossary')!;
   try {
-    const data = await chrome.storage.local.get('jp_glossary_builtin_display');
-    // Use built-in list from glossary manager (loaded via storage)
-    const builtIn: GlossaryEntry[] = [
+    const examples: GlossaryEntry[] = [
       { japanese: 'おはようございます', korean: '안녕하세요 (아침)', note: '아침 인사' },
       { japanese: 'お疲れ様です', korean: '수고하셨습니다', note: '업무/활동 후' },
       { japanese: 'よろしくお願いします', korean: '잘 부탁드립니다' },
@@ -161,7 +159,7 @@ async function loadGlossary(): Promise<void> {
       { japanese: '推し', korean: '최애', note: '좋아하는 대상' },
       { japanese: '草', korean: 'ㅋㅋㅋ', note: '인터넷 웃음' },
     ];
-    builtInContainer.innerHTML = builtIn
+    builtInContainer.innerHTML = examples
       .map(
         (e) => `<div class="glossary-item">
           <span class="g-jp">${esc(e.japanese)}</span>

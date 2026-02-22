@@ -1,5 +1,7 @@
 import type { MorphemeToken } from '@/types';
 import kuromoji from 'kuromoji';
+import { applyReadingOverrides } from './reading-overrides';
+import { applyContextRules } from './reading-context-rules';
 
 const KANJI_REGEX = /[\u4E00-\u9FFF\u3400-\u4DBF]/;
 
@@ -110,7 +112,7 @@ export class MorphologicalAnalyzer {
     if (!this.tokenizer) throw new Error('Tokenizer not initialized');
 
     const tokens = this.tokenizer.tokenize(text);
-    return tokens.map((t) => {
+    let result = tokens.map((t) => {
       const reading = t.reading ? katakanaToHiragana(t.reading) : t.surface_form;
       return {
         surface: t.surface_form,
@@ -121,6 +123,9 @@ export class MorphologicalAnalyzer {
         isKanji: KANJI_REGEX.test(t.surface_form),
       };
     });
+    result = applyReadingOverrides(result);
+    result = applyContextRules(result);
+    return result;
   }
 
   isReady(): boolean {

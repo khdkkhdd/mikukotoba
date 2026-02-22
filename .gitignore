@@ -6,6 +6,10 @@ dist/
 test-results/
 .DS_Store
 
+# Dictionary build artifacts
+tools/neologd-seeds/*.csv
+tools/baseline.json
+
 # Expo / React Native
 .expo/
 ios/

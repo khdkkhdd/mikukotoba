@@ -2,6 +2,13 @@
   "name": "mikukotoba",
   "private": true,
   "workspaces": ["packages/*"],
+  "scripts": {
+    "build:dict": "node tools/build-dict.mjs",
+    "build:dict:ipadic-only": "node tools/build-dict.mjs --ipadic-only",
+    "verify:dict": "node tools/verify-dict.mjs",
+    "add:override": "node tools/add-reading-override.mjs",
+    "add:context-rule": "node tools/add-context-rule.mjs"
+  },
   "overrides": {
     "react": "19.1.0"
   }

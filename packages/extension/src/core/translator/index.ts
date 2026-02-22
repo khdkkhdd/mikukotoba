@@ -1,5 +1,6 @@
 import type { TranslationResult, MorphemeToken, UserSettings, UserCorrection, LLMPlatform } from '@/types';
 import { MorphologicalAnalyzer } from '@/core/analyzer/morphological';
+import { correctReadingsIfNeeded } from '@/core/analyzer/reading-llm-corrector';
 import { PapagoClient } from './papago';
 import { LLMRegistry } from './llm-registry';
 import { ContextManager } from './context-manager';
@@ -230,6 +231,16 @@ export class Translator {
         baseForm: workText,
         isKanji: false,
       }];
+    }
+
+    // 2.5. Selective LLM reading correction (P4)
+    const llmClientForReading = this.llmRegistry.getClient(this.activePlatform);
+    if (llmClientForReading.isConfigured()) {
+      try {
+        tokens = await correctReadingsIfNeeded(tokens, workText, llmClientForReading);
+      } catch {
+        // 읽기 보정 실패는 번역에 영향을 주지 않음
+      }
     }
 
     // 3. Complexity assessment

@@ -1,0 +1,68 @@
+[
+  {
+    "surface": "この間",
+    "kuromojiReading": "このかん",
+    "correctReading": "このあいだ",
+    "note": "일상적으로는 このあいだ"
+  },
+  {
+    "surface": "河原",
+    "kuromojiReading": "かわはら",
+    "correctReading": "かわら",
+    "note": "かわはら → かわら"
+  },
+  {
+    "surface": "眼鏡",
+    "kuromojiReading": "がんきょう",
+    "correctReading": "めがね",
+    "note": "일반적으로 めがね"
+  },
+  {
+    "surface": "玄人",
+    "kuromojiReading": "げんじん",
+    "correctReading": "くろうと",
+    "note": "げんじん → くろうと"
+  },
+  {
+    "surface": "重音",
+    "kuromojiReading": "じゅうおん",
+    "correctReading": "かさね",
+    "note": "重音テト 등 고유명사"
+  },
+  {
+    "surface": "初音",
+    "kuromojiReading": "しょおん",
+    "correctReading": "はつね",
+    "note": "初音ミク 등 고유명사"
+  },
+  {
+    "surface": "素人",
+    "kuromojiReading": "そじん",
+    "correctReading": "しろうと",
+    "note": "そじん → しろうと"
+  },
+  {
+    "surface": "大人気",
+    "kuromojiReading": "おとなき",
+    "correctReading": "だいにんき",
+    "note": "おとなき → だいにんき"
+  },
+  {
+    "surface": "仲人",
+    "kuromojiReading": "なかひと",
+    "correctReading": "なこうど",
+    "note": "なかひと → なこうど"
+  },
+  {
+    "surface": "田舎",
+    "kuromojiReading": "たしゃ",
+    "correctReading": "いなか",
+    "note": "たしゃ → いなか"
+  },
+  {
+    "surface": "梅雨",
+    "kuromojiReading": "ばいう",
+    "correctReading": "つゆ",
+    "note": "일반적으로 つゆ"
+  }
+]

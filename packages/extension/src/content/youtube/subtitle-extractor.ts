@@ -39,6 +39,7 @@ export class SubtitleExtractor {
   private lastDisplayedText: string = '';
   private videoElement: HTMLVideoElement | null = null;
   private trackWatcherCleanup: (() => void) | null = null;
+  private trackModeCleanup: (() => void) | null = null;
   private upgrading = false;
 
   constructor(onSubtitle: SubtitleCallback, onClear?: () => void) {
@@ -125,6 +126,7 @@ export class SubtitleExtractor {
 
   stop(): void {
     this.stopTrackWatcher();
+    this.stopTrackModeWatcher();
     if (this.domObserver) {
       this.domObserver.disconnect();
       this.domObserver = null;
@@ -205,6 +207,33 @@ export class SubtitleExtractor {
   }
 
   /**
+   * Watch for the Japanese TextTrack being disabled (user turns off CC).
+   * The 'change' event fires on textTracks when mode changes,
+   * but 'cuechange' does NOT fire, so the overlay would stay visible.
+   */
+  private startTrackModeWatcher(video: HTMLVideoElement, jaTrack: TextTrack): void {
+    this.stopTrackModeWatcher();
+
+    const handler = () => {
+      if (jaTrack.mode === 'disabled') {
+        log.info('TextTrack disabled (CC turned off)');
+        if (this.lastDisplayedText) {
+          this.lastDisplayedText = '';
+          this.onClear?.();
+        }
+      }
+    };
+
+    video.textTracks.addEventListener('change', handler);
+    this.trackModeCleanup = () => video.textTracks.removeEventListener('change', handler);
+  }
+
+  private stopTrackModeWatcher(): void {
+    this.trackModeCleanup?.();
+    this.trackModeCleanup = null;
+  }
+
+  /**
    * Method 1: HTML5 TextTrack API
    */
   private async tryTextTrack(): Promise<boolean> {
@@ -281,6 +310,9 @@ export class SubtitleExtractor {
 
     jaTrack.addEventListener('cuechange', handler);
     this.trackListener = () => jaTrack!.removeEventListener('cuechange', handler);
+
+    // Watch for track mode changes (user turning off CC → mode becomes 'disabled')
+    this.startTrackModeWatcher(video, jaTrack);
 
     // Immediately check for already-active cues
     // (mode change from 'showing' to 'hidden' doesn't fire cuechange)
@@ -527,7 +559,13 @@ export class SubtitleExtractor {
 
     const checkSubtitle = () => {
       const segments = document.querySelectorAll('.ytp-caption-segment');
-      if (segments.length === 0) return;
+      if (segments.length === 0) {
+        if (this.lastDisplayedText) {
+          this.lastDisplayedText = '';
+          this.onClear?.();
+        }
+        return;
+      }
 
       const text = Array.from(segments)
         .map((s) => s.textContent?.trim())

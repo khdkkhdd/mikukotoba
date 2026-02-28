@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt7dRxqQea1gnxopIiK6/yb+cVdLOobVsNQeE4KTc8Wg2qe2EuO3BI9kLxMnjYeeKSjxb9USkd5WvA302FBLj9TTX7kFjVQBKH01WG+9VitFUJ1K81oxLTkzp+RX2WbsKjH6WZP0oq2kKdGDrS7bTJD23SEiqz5Y8YMYg2iaCXGeXzIslY+pxbJ4W+D1qNOUHya04lzMccCXzBGuRVo/sumczMMyxtCac4KLXQPIZbOZOUAHX8hRJDr/k6S536GKHvBj0g0Ym1AN7ARo1r4BZGRJoxMgciUZItcC4AHEH3U1ENVerUoHzz/6JmrdTQxT03yBEAjTcnLJrkYRLPhFJNwIDAQAB",
   "name": "ミク言葉",
   "version": "1.0.0",
   "description": "일본어 학습 보조 - 후리가나, 로마지, 한국어 번역을 동시에",

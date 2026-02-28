@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { useDatabase } from '../../src/components/DatabaseContext';
 import { useVocabStore } from '../../src/stores/vocab-store';
 import { getDueCount, getNewCount, getTodayReviewCount } from '../../src/fsrs';
@@ -14,18 +15,20 @@ export default function HomeScreen() {
   const [newCount, setNewCount] = useState(0);
   const [todayReviewed, setTodayReviewed] = useState(0);
 
-  useEffect(() => {
-    (async () => {
-      const [due, newC, reviewed] = await Promise.all([
-        getDueCount(database),
-        getNewCount(database),
-        getTodayReviewCount(database),
-      ]);
-      setDueCount(due);
-      setNewCount(newC);
-      setTodayReviewed(reviewed);
-    })();
-  }, [database, totalCount]);
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const [due, newC, reviewed] = await Promise.all([
+          getDueCount(database),
+          getNewCount(database),
+          getTodayReviewCount(database),
+        ]);
+        setDueCount(due);
+        setNewCount(newC);
+        setTodayReviewed(reviewed);
+      })();
+    }, [database])
+  );
 
   return (
     <View style={styles.container}>

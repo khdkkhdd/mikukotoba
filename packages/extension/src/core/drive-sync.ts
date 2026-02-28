@@ -502,11 +502,14 @@ async function pushPartitionImmediate(date: string): Promise<number> {
     }
   }
 
+  // 리모트 메타에 쓸 버전: 로컬 + 리모트를 Math.max 머지 (버전 역행 방지)
+  // 주의: 로컬 meta.partitionVersions에는 반영하지 않음.
+  // 로컬에 반영하면 아직 pull하지 않은 날짜의 버전까지 로컬에 기록되어
+  // 이후 pull 시 "이미 최신"으로 판단하여 동기화가 누락됨.
   const mergedVersions = { ...remoteVersions };
   for (const [d, v] of Object.entries(meta.partitionVersions)) {
     mergedVersions[d] = Math.max(v, mergedVersions[d] || 0);
   }
-  meta.partitionVersions = mergedVersions;
 
   const remoteSyncMeta: DriveSyncMeta = {
     partitionVersions: mergedVersions,

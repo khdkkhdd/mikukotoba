@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { useDatabase } from '../../src/components/DatabaseContext';
 import { getDueCount, getNewCount } from '../../src/fsrs';
 import { getStudyCountsByTag, type TagStudyCounts } from '../../src/db';
@@ -30,19 +31,21 @@ function ModeSelector({ onSrs, onRelay }: { onSrs: (tag?: string) => void; onRel
   const [newCount, setNewCount] = useState(0);
   const [tagCounts, setTagCounts] = useState<Record<string, TagStudyCounts>>({});
 
-  useEffect(() => {
-    async function load() {
-      const [due, newC, tags] = await Promise.all([
-        getDueCount(database),
-        getNewCount(database),
-        getStudyCountsByTag(database),
-      ]);
-      setDueCount(due);
-      setNewCount(newC);
-      setTagCounts(tags);
-    }
-    load();
-  }, [database]);
+  useFocusEffect(
+    useCallback(() => {
+      async function load() {
+        const [due, newC, tags] = await Promise.all([
+          getDueCount(database),
+          getNewCount(database),
+          getStudyCountsByTag(database),
+        ]);
+        setDueCount(due);
+        setNewCount(newC);
+        setTagCounts(tags);
+      }
+      load();
+    }, [database])
+  );
 
   const tagEntries = Object.entries(tagCounts)
     .sort(([, a], [, b]) => (b.due + b.new) - (a.due + a.new));

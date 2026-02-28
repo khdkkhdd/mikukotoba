@@ -198,10 +198,8 @@ export async function getNewCount(db: SQLiteDatabase): Promise<number> {
 }
 
 export async function getTodayReviewCount(db: SQLiteDatabase): Promise<number> {
-  const today = new Date().toISOString().slice(0, 10);
   const result = await db.getFirstAsync<{ count: number }>(
-    "SELECT COUNT(*) as count FROM review_log WHERE reviewed_at LIKE ?",
-    [`${today}%`]
+    "SELECT COUNT(*) as count FROM review_log WHERE DATE(reviewed_at, '+9 hours') = DATE('now', '+9 hours')"
   );
   return result?.count ?? 0;
 }

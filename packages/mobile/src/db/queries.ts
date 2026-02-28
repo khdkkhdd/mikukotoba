@@ -90,11 +90,16 @@ export async function upsertEntry(db: SQLiteDatabase, entry: VocabEntry): Promis
 }
 
 export async function upsertEntries(db: SQLiteDatabase, entries: VocabEntry[]): Promise<void> {
-  await db.withTransactionAsync(async () => {
+  await db.execAsync('BEGIN TRANSACTION');
+  try {
     for (const entry of entries) {
       await upsertEntry(db, entry);
     }
-  });
+    await db.execAsync('COMMIT');
+  } catch (e) {
+    try { await db.execAsync('ROLLBACK'); } catch { /* already rolled back */ }
+    throw e;
+  }
 }
 
 export async function deleteEntry(db: SQLiteDatabase, id: string): Promise<void> {
@@ -197,7 +202,8 @@ export async function replaceReviewLogsByMonth(
   const nextMonth = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
   const endDate = `${nextMonth}-01T00:00:00.000Z`;
 
-  await db.withTransactionAsync(async () => {
+  await db.execAsync('BEGIN TRANSACTION');
+  try {
     await db.runAsync(
       'DELETE FROM review_log WHERE reviewed_at >= ? AND reviewed_at < ?',
       [startDate, endDate]
@@ -209,7 +215,11 @@ export async function replaceReviewLogsByMonth(
         [log.vocab_id, log.rating, log.reviewed_at, log.vocab_id]
       );
     }
-  });
+    await db.execAsync('COMMIT');
+  } catch (e) {
+    try { await db.execAsync('ROLLBACK'); } catch { /* already rolled back */ }
+    throw e;
+  }
 }
 
 // dirty vocabIds → dateAdded 월(YYYY-MM) Set 반환
@@ -245,7 +255,8 @@ export async function replaceAllReviewLogs(
   db: SQLiteDatabase,
   logs: DriveReviewLogEntry[]
 ): Promise<void> {
-  await db.withTransactionAsync(async () => {
+  await db.execAsync('BEGIN TRANSACTION');
+  try {
     await db.runAsync('DELETE FROM review_log');
     for (const log of logs) {
       await db.runAsync(
@@ -254,7 +265,11 @@ export async function replaceAllReviewLogs(
         [log.vocab_id, log.rating, log.reviewed_at, log.vocab_id]
       );
     }
-  });
+    await db.execAsync('COMMIT');
+  } catch (e) {
+    try { await db.execAsync('ROLLBACK'); } catch { /* already rolled back */ }
+    throw e;
+  }
 }
 
 // Tombstone 관련
@@ -335,7 +350,8 @@ export async function upsertCardStates(
   db: SQLiteDatabase,
   states: Record<string, DriveCardState>
 ): Promise<void> {
-  await db.withTransactionAsync(async () => {
+  await db.execAsync('BEGIN TRANSACTION');
+  try {
     for (const [vocabId, card] of Object.entries(states)) {
       await db.runAsync(
         `INSERT OR REPLACE INTO card_state (vocab_id, state, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, last_review, learning_steps)
@@ -355,7 +371,11 @@ export async function upsertCardStates(
         ]
       );
     }
-  });
+    await db.execAsync('COMMIT');
+  } catch (e) {
+    try { await db.execAsync('ROLLBACK'); } catch { /* already rolled back */ }
+    throw e;
+  }
 }
 
 // SRS 초기화용: due 카드 + VocabEntry + Card 한 번에 로드
@@ -603,6 +623,64 @@ export async function getRandomEntriesByFilters(
     [limit]
   );
   return rows.map(rowToEntry);
+}
+
+export async function getShuffledIdsByFilters(
+  db: SQLiteDatabase,
+  filters: RelayFilters
+): Promise<string[]> {
+  const { tag, startDate, endDate } = filters;
+  const hasDate = startDate && endDate;
+  const hasTag = tag !== undefined;
+
+  if (hasTag && tag === '') {
+    const rows = await db.getAllAsync<{ id: string }>(
+      `SELECT id FROM vocab WHERE (tags IS NULL OR tags = '[]')${
+        hasDate ? ' AND date_added BETWEEN ? AND ?' : ''
+      } ORDER BY RANDOM()`,
+      hasDate ? [startDate, endDate] : []
+    );
+    return rows.map((r) => r.id);
+  }
+
+  if (hasTag) {
+    const pattern = `%${tag}%`;
+    const rows = await db.getAllAsync<{ id: string; tags: string }>(
+      `SELECT id, tags FROM vocab WHERE tags LIKE ?${
+        hasDate ? ' AND date_added BETWEEN ? AND ?' : ''
+      } ORDER BY RANDOM()`,
+      hasDate ? [pattern, startDate, endDate] : [pattern]
+    );
+    return rows.filter((r) => parseTags(r.tags).includes(tag)).map((r) => r.id);
+  }
+
+  if (hasDate) {
+    const rows = await db.getAllAsync<{ id: string }>(
+      'SELECT id FROM vocab WHERE date_added BETWEEN ? AND ? ORDER BY RANDOM()',
+      [startDate, endDate]
+    );
+    return rows.map((r) => r.id);
+  }
+
+  const rows = await db.getAllAsync<{ id: string }>(
+    'SELECT id FROM vocab ORDER BY RANDOM()'
+  );
+  return rows.map((r) => r.id);
+}
+
+export async function getEntriesByIds(
+  db: SQLiteDatabase,
+  ids: string[]
+): Promise<VocabEntry[]> {
+  if (ids.length === 0) return [];
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM vocab WHERE id IN (${placeholders})`,
+    ids
+  );
+  // Preserve the order of ids
+  const map = new Map(rows.map((r) => [r.id as string, rowToEntry(r)]));
+  return ids.map((id) => map.get(id)!).filter(Boolean);
 }
 
 export async function getCountByFilters(

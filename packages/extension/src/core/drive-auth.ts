@@ -3,18 +3,13 @@ import { createLogger } from '@/core/logger';
 
 const log = createLogger('DriveAuth');
 const TOKEN_KEY = 'jp_drive_token';
-const CLIENT_ID_KEY = 'jp_drive_client_id';
+const CLIENT_ID = import.meta.env.VITE_DRIVE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata openid email';
 
 interface StoredToken {
   access_token: string;
   expires_at: number;
   email?: string;
-}
-
-async function getClientId(): Promise<string> {
-  const data = await chrome.storage.local.get(CLIENT_ID_KEY);
-  return data[CLIENT_ID_KEY] || '';
 }
 
 function getRedirectUrl(): string {
@@ -54,15 +49,10 @@ const PERMANENT_ERRORS = new Set(['access_denied', 'invalid_scope']);
  */
 async function silentRefresh(token: StoredToken): Promise<string | null> {
   try {
-    const clientId = await getClientId();
-    if (!clientId) {
-      log.info('silentRefresh: no clientId');
-      return null;
-    }
     const redirectUrl = getRedirectUrl();
 
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('client_id', CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', redirectUrl);
     authUrl.searchParams.set('response_type', 'token');
     authUrl.searchParams.set('scope', SCOPES);
@@ -120,12 +110,10 @@ async function silentRefresh(token: StoredToken): Promise<string | null> {
 
 export const DriveAuth = {
   async login(): Promise<DriveStatus> {
-    const clientId = await getClientId();
-    if (!clientId) throw new Error('OAuth Client ID가 설정되지 않았습니다.');
     const redirectUrl = getRedirectUrl();
 
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    authUrl.searchParams.set('client_id', clientId);
+    authUrl.searchParams.set('client_id', CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', redirectUrl);
     authUrl.searchParams.set('response_type', 'token');
     authUrl.searchParams.set('scope', SCOPES);

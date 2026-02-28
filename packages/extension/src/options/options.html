@@ -279,24 +279,6 @@
       <h2>Google Drive 동기화</h2>
       <p class="help-text">단어장 데이터를 Google Drive에 동기화하여 기기 간 공유할 수 있습니다.</p>
 
-      <div class="form-group">
-        <label>OAuth Client ID</label>
-        <div class="input-row">
-          <input type="password" id="driveClientId" placeholder="GCP OAuth 2.0 Client ID">
-          <button id="toggleDriveClientId" class="btn-small">표시</button>
-          <button id="saveDriveClientId" class="btn-small btn-primary">저장</button>
-        </div>
-        <p class="help-text">Google Cloud Console에서 발급한 OAuth 2.0 클라이언트 ID를 입력하세요.</p>
-      </div>
-
-      <div class="form-group">
-        <label>Redirect URI <span class="help-text">(GCP 승인된 리디렉션 URI에 추가)</span></label>
-        <div class="input-row">
-          <input type="text" id="driveRedirectUri" readonly>
-          <button id="copyRedirectUri" class="btn-small">복사</button>
-        </div>
-      </div>
-
       <div id="driveNotConnected">
         <button id="driveLoginBtn" class="btn btn-primary">Google 계정 연결</button>
       </div>

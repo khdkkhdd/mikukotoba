@@ -500,20 +500,7 @@ function setupEventListeners(): void {
 
 // ──────────────── Google Drive Sync ────────────────
 
-const DRIVE_CLIENT_ID_KEY = 'jp_drive_client_id';
-
-async function loadDriveClientId(): Promise<void> {
-  const data = await chrome.storage.local.get(DRIVE_CLIENT_ID_KEY);
-  const value = data[DRIVE_CLIENT_ID_KEY] || '';
-  (document.getElementById('driveClientId') as HTMLInputElement).value = value;
-
-  // Show redirect URI for GCP configuration
-  const redirectUri = chrome.identity.getRedirectURL();
-  (document.getElementById('driveRedirectUri') as HTMLInputElement).value = redirectUri;
-}
-
 async function loadDriveStatus(): Promise<void> {
-  await loadDriveClientId();
   try {
     const resp = await chrome.runtime.sendMessage({ type: 'SYNC_GET_STATUS' });
     const status = resp?.payload as (DriveStatus & { lastSync?: number }) | undefined;
@@ -545,25 +532,6 @@ function showSyncMessage(text: string, type: 'success' | 'error' | 'syncing'): v
 }
 
 function setupDriveListeners(): void {
-  // Client ID save & toggle
-  setupPasswordToggle('toggleDriveClientId', 'driveClientId');
-
-  document.getElementById('copyRedirectUri')!.addEventListener('click', () => {
-    const input = document.getElementById('driveRedirectUri') as HTMLInputElement;
-    navigator.clipboard.writeText(input.value);
-    const btn = document.getElementById('copyRedirectUri')!;
-    btn.textContent = '복사됨';
-    setTimeout(() => { btn.textContent = '복사'; }, 1500);
-  });
-
-  document.getElementById('saveDriveClientId')!.addEventListener('click', async () => {
-    const value = (document.getElementById('driveClientId') as HTMLInputElement).value.trim();
-    await chrome.storage.local.set({ [DRIVE_CLIENT_ID_KEY]: value });
-    const btn = document.getElementById('saveDriveClientId')!;
-    btn.textContent = '저장됨';
-    setTimeout(() => { btn.textContent = '저장'; }, 1500);
-  });
-
   document.getElementById('driveLoginBtn')!.addEventListener('click', async () => {
     const btn = document.getElementById('driveLoginBtn') as HTMLButtonElement;
     btn.disabled = true;

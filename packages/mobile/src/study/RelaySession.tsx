@@ -1,7 +1,7 @@
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useDatabase } from '../components/DatabaseContext';
-import { getDateRange, getDateGroups, getAllTagCounts, getRandomEntriesByFilters, getCountByFilters } from '../db/queries';
+import { getDateRange, getDateGroups, getAllTagCounts, getShuffledIdsByFilters, getEntriesByIds, getCountByFilters } from '../db/queries';
 import type { RelayFilters } from '../db/queries';
 import { Calendar, type CalendarMarking } from '../components/Calendar';
 import { StudyCard } from './StudyCard';
@@ -9,6 +9,12 @@ import type { VocabEntry } from '@mikukotoba/shared';
 import { colors, spacing, fontSize } from '../components/theme';
 
 const BATCH_SIZE = 50;
+
+/** Ref state for cycle-based batching */
+interface CycleState {
+  ids: string[];
+  offset: number;
+}
 
 interface RelaySessionProps {
   onExit: () => void;
@@ -132,12 +138,25 @@ export function RelaySession({ onExit }: RelaySessionProps) {
     updateCount(tag, startDate, endDate);
   }, [updateCount, startDate, endDate]);
 
-  // 배치 로드
-  const loadBatch = useCallback(async () => {
+  // 사이클 기반 배치 로드
+  const cycleRef = useRef<CycleState>({ ids: [], offset: 0 });
+
+  const loadNextBatch = useCallback(async (freshCycle: boolean) => {
     const filters: RelayFilters = {};
     if (selectedTag !== undefined) filters.tag = selectedTag;
     if (startDate && endDate) { filters.startDate = startDate; filters.endDate = endDate; }
-    const batch = await getRandomEntriesByFilters(database, filters, BATCH_SIZE);
+
+    if (freshCycle || cycleRef.current.offset >= cycleRef.current.ids.length) {
+      // 새 사이클: 전체 ID를 랜덤 순서로 가져옴
+      const ids = await getShuffledIdsByFilters(database, filters);
+      cycleRef.current = { ids, offset: 0 };
+    }
+
+    const { ids, offset } = cycleRef.current;
+    const batchIds = ids.slice(offset, offset + BATCH_SIZE);
+    cycleRef.current.offset = offset + batchIds.length;
+
+    const batch = await getEntriesByIds(database, batchIds);
     setEntries(batch);
     setCurrentIndex(0);
     setShowAnswer(false);
@@ -147,10 +166,10 @@ export function RelaySession({ onExit }: RelaySessionProps) {
 
   // 학습 시작
   const handleStart = useCallback(async () => {
-    await loadBatch();
+    await loadNextBatch(true);
     setPhase('studying');
     setViewedCount(0);
-  }, [loadBatch]);
+  }, [loadNextBatch]);
 
   // 다음 카드
   const handleNext = useCallback(async () => {
@@ -162,9 +181,9 @@ export function RelaySession({ onExit }: RelaySessionProps) {
       setShowReadingHint(false);
       setShowExampleHint(false);
     } else {
-      await loadBatch();
+      await loadNextBatch(false);
     }
-  }, [currentIndex, entries.length, loadBatch]);
+  }, [currentIndex, entries.length, loadNextBatch]);
 
   const today = fmtToday();
   const hasDateRange = startDate && endDate;
@@ -286,7 +305,7 @@ export function RelaySession({ onExit }: RelaySessionProps) {
   // --- 학습 화면 ---
   if (entries.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, styles.studyContainer]}>
         <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
@@ -295,7 +314,7 @@ export function RelaySession({ onExit }: RelaySessionProps) {
   const current = entries[currentIndex];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, styles.studyContainer]}>
       <View style={styles.sessionHeader}>
         <Pressable style={styles.closeButton} onPress={onExit} hitSlop={8}>
           <Text style={styles.closeText}>✕ 종료</Text>
@@ -308,7 +327,7 @@ export function RelaySession({ onExit }: RelaySessionProps) {
 
       <View style={styles.relayHeader}>
         <Text style={styles.relayCount}>
-          {viewedCount + 1}번째 카드 · 총 {totalCount}개
+          {(viewedCount % totalCount) + 1}/{totalCount}
         </Text>
       </View>
 
@@ -321,7 +340,7 @@ export function RelaySession({ onExit }: RelaySessionProps) {
           onToggleReadingHint={() => setShowReadingHint((v) => !v)}
           onToggleExampleHint={() => setShowExampleHint((v) => !v)}
           onRevealAnswer={() => setShowAnswer(true)}
-          borderColor={colors.warning}
+          borderColor={undefined}
         />
       </View>
 
@@ -351,6 +370,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  studyContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: 60,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,

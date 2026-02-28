@@ -3,7 +3,7 @@ import { createLogger } from '@/core/logger';
 
 const log = createLogger('DriveAuth');
 const TOKEN_KEY = 'jp_drive_token';
-const CLIENT_ID = import.meta.env.VITE_DRIVE_CLIENT_ID;
+const CLIENT_ID = '582194695290-ggtpq96agm47347seh50ro8qt105dsm0.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata openid email';
 
 interface StoredToken {
